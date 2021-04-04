@@ -377,7 +377,7 @@
 	     (aref element 1) (subseq element 1 (1- (length element)))))
 	((member element '("⍺" "⍵" "⍺⍺" "⍵⍵") :test #'string=)
 	 ;; alpha and omega characters are directly changed to symbols in the April package
-	 (intern element idiom-name))
+	 (values (intern element idiom-name) t))
 	((numeric-string-p element)
 	 (parse-apl-number-string element))
 	(t (or (and (char= #\⎕ (aref element 0))
@@ -385,7 +385,7 @@
 			      (intern (string-upcase element) "APRIL"))
 			(getf (rest (assoc :constant symbols))
 			      (intern (string-upcase element) "APRIL"))))
-	       (intern element)))))
+	       (values (intern element) t)))))
 
 (defun apl-timestamp ()
   "Generate an APL timestamp, a vector of the current year, month, day, hour, minute, second and millisecond."
@@ -489,6 +489,10 @@
 	  (of-functions this-idiom reference mode))
       (if (and (symbolp reference) (fboundp reference))
 	  `(function ,reference)
+	  ;; (if (not (member mode '(:monadic-inverse :dyadic-inverse)))
+	  ;;     `(function ,reference)
+	  ;;     `(function ,(intern (concat 'string "𝕚∇" (string reference))
+	  ;; 			  (package-name (symbol-package reference)))))
 	  (if (and (listp reference)
 		   (or (eql 'lambda (first reference))
 		       (and (symbolp (first reference))
@@ -843,7 +847,7 @@ It remains here as a standard against which to compare methods for composing APL
 	(is-stranded-assignment)
 	(token-list (or token-list (list (list :args) (list :assigned)))))
     (loop :for token :in tokens
-       :do (if (and (listp token) (not (eq :fn (first token))))
+       :do (if (and (listp token) (not (member (first token) '(:fn :op))))
 	       ;; recursively descend into lists, but not functions contained within a function,
 	       ;; otherwise something like {÷{⍺⍺ ⍵}5} will be read as an operator because an inline
 	       ;; operator is within it

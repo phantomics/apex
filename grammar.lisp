@@ -147,7 +147,8 @@
 
 (defun process-operator (this-item properties process idiom space)
   (if (listp this-item)
-      (if (eq :op (first this-item))
+      (if (and (eq :op (first this-item))
+	       (not (listp (first (last this-item)))))
 	  ;; process an operator token, allowing specification of the valence,
 	  ;; either :lateral or :pivotal
 	  (destructuring-bind (op-type op-symbol)
@@ -160,7 +161,9 @@
 			 (values nil nil)))
 		    (valid-by-valence (values op-symbol (list :type (list :operator op-type))))
 		    (t (values nil nil)))))
-	  (if (and (eql :fn (first this-item))
+	  (if (and (or (eql :fn (first this-item))
+		       (eql :op (first this-item)))
+		   ;; (getf properties :inline)
 		   (listp (first (last this-item))))
 	      (let* ((fn (first (last this-item)))
 		     (symbols-used (glean-symbols-from-tokens fn space))
@@ -259,6 +262,12 @@
      (setq prior-items items)
      (assign-element function-form function-props process-function (first (last preceding-properties)))
      (if (eq :is-inline-operator function-form)
+	 (progn (setq items prior-items)
+		(assign-element function-form function-props process-operator)))
+     (if (and (not function-form)
+	      (listp (first items))
+	      (eql :op (caar items))
+	      (listp (first (last (first items)))))
 	 (progn (setq items prior-items)
 		(assign-element function-form function-props process-operator))))
   (let ((is-function (or (not (member :overloaded-operator (getf function-props :type)))
@@ -608,8 +617,7 @@
 
 (composer-pattern train-composition (center center-props is-center-function left left-props preceding-type)
     ;; "Match a train function composition like (-,÷)."
-    (;; (print (list :it items precedent))
-     (setq preceding-type (getf (first preceding-properties) :type))
+    ((setq preceding-type (getf (first preceding-properties) :type))
      (if (eq :function (first preceding-type))
 	 (progn (assign-subprocessed center center-props
 				     `(:special (:omit (:value-assignment :function-assignment
@@ -691,7 +699,7 @@
 			 (assign-element left-operand left-operand-props process-function)
 			 ;; if the next function is symbolic, assign it uncomposed;
 			 ;; this is needed for things like ∊∘.+⍨10 2 to work correctly
-			 (if (not (member :symbolic-function (getf left-operand-props :type)))
+			 (if (and items (not (member :symbolic-function (getf left-operand-props :type))))
 			     (progn (setq items prior-items item (first items) rest-items (rest items))
 				    ;; the special :omit property makes it so that the pattern matching
 				    ;; the operand may not be processed as a value assignment, function
@@ -735,7 +743,8 @@
 (composer-pattern pivotal-composition
     (operator operator-props left-operand-axes left-operand left-operand-props left-value
 	      left-value-props prior-items right-operand-axes preceding-type)
-    ;; Match a pivotal function composition like ×.+, part of a functional expression. It may come after either a function or an array, since some operators take array operands.
+    ;; Match a pivotal function composition like ×.+, part of a functional expression.
+    ;; It may come after either a function or an array, since some operators take array operands.
     ((setq preceding-type (getf (first preceding-properties) :type))
      (assign-element operator operator-props process-operator '(:valence :pivotal))
      (if operator (progn (assign-axes left-operand-axes)

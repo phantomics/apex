@@ -41,7 +41,8 @@
 
  ;; standard grammar components, with elements to match the basic language forms and
  ;; pattern-matching systems to register combinations of those forms
- (grammar (:elements '(:array #'process-value :function #'process-function :operator #'process-operator))
+ (grammar (:elements '(:array #'process-value :function #'process-function
+		       :referenced-operator #'process-referenced-operator))
 	  (:opening-patterns *composer-opening-patterns*)
 	  (:following-patterns *composer-following-patterns*
 			       ;; composer-optimized-patterns-common
@@ -140,6 +141,22 @@
 						       `(inws *print-precision*)))
 			    (list 'comparison-tolerance (or (getf state :comparison-tolerance)
 							    `(inws *comparison-tolerance*))))))
+	    ;; :lexer-postprocess
+	    ;; (lambda (tokens idiom space)
+	    ;;   ;; currently, this function is used to initialize function and variable references
+	    ;;   ;; in the workspace before compilation is performed so that recursive
+	    ;;   ;; functions will work correctly as with fn←{A←⍵-1 ⋄ $[A≥0;A,f A;0]} ⋄ f 5
+	    ;;   (match tokens
+	    ;; 	((list (guard fn-form (and (listp fn-form)
+	    ;; 				    (eq :fn (first fn-form))
+	    ;; 				    (listp (second fn-form))))
+	    ;; 	       '(:fn #\←) (guard symbol (and (symbolp symbol)
+	    ;; 					     (not (member symbol '(⍺⍺ ⍵⍵))))))
+	    ;; 	 (if (is-workspace-value symbol)
+	    ;; 	     (makunbound (intern (string symbol) space)))
+	    ;; 	 (if (not (fboundp (intern (string symbol) space)))
+	    ;; 	     (setf (symbol-function (intern (string symbol) space)) #'dummy-nargument-function))))
+	    ;;   tokens)
 	    :postprocess-compiled
 	    (lambda (state &rest inline-arguments)
 	      (lambda (form)

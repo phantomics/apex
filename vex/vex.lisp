@@ -682,7 +682,8 @@
 			   (aref content 0)
 			   (make-array (1- (length content)) :element-type 'character
 				       :displaced-to content))))))
-	     (=vex-closure (boundary-chars &optional transform-by &key (disallow-linebreaks))
+	     (=vex-closure (boundary-chars &optional transform-by
+					   &key (disallow-linebreaks) (symbol-collector))
 	       (let* ((balance 1)
 		      (char-index 0)
 		      ;; disallow linebreak overriding opening and closing characters
@@ -726,8 +727,16 @@
 						   (incf char-index 1)
 						   (< 0 balance)))))
 					(if transform-by transform-by
+					    ;; (lambda (string-content)
+					    ;;   (parse string-content (=vex-string idiom)))
+
 					    (lambda (string-content)
-					      (first (parse string-content (=vex-string idiom))))))
+					      (destructuring-bind (parsed remaining meta)
+						  (parse string-content (=vex-string idiom))
+						(if symbol-collector (funcall symbol-collector meta))
+						parsed))
+					    
+					    ))
 			    (?eq (aref boundary-chars 1)))
 		   enclosed)))
 	     (=vex-errant-closing-character (boundary-chars)
@@ -743,21 +752,38 @@
 			    (=subseq (%any (?satisfies 'characterp))))
 		   (error "Mismatched enclosing characters; each closing ~a must be preceded by an opening ~a."
 			  errant-char matching-char))))
-	     (process-lines (lines &optional output)
+	     (process-lines (lines &optional output meta)
 	       (if (or (= 0 (length lines))
 		       (loop :for c :across lines :always (char= c #\ )))
-		   output (destructuring-bind (out remaining)
-			      (parse lines (=vex-string idiom))
-			    (process-lines remaining (if (null out)
-							 output (append output (list out)))))))
+		   (list output meta)
+		   (destructuring-bind (out remaining meta)
+		       (parse lines (=vex-string idiom nil meta))
+		     ;; (print (list :m meta))
+		     (process-lines remaining (if (null out)
+						  output (append output (list out)))
+				    meta))))
+	     ;; (process-lines (lines &optional output meta)
+	     ;;   (if (or (= 0 (length lines))
+	     ;; 	       (loop :for c :across lines :always (char= c #\ )))
+	     ;; 	   (list output meta)
+	     ;; 	   (destructuring-bind (out meta)
+	     ;; 	       (parse lines (=vex-string idiom nil meta))
+	     ;; 	     (print (list :m meta))
+	     ;; 	     (process-lines remaining (if (null out)
+	     ;; 					  output (append output (list out)))
+	     ;; 			    meta))))
 	     (handle-axes (input-string)
 	       (let ((each-axis (funcall (of-utilities idiom :process-axis-string)
 					 input-string)))
-		 (cons :axes (mapcar #'process-lines each-axis))))
+		 (cons :axes (mapcar #'first (mapcar #'process-lines each-axis)))))
 	     (handle-function (input-string)
-	       (list :fn (process-lines input-string))))
+	       (destructuring-bind (content meta) (process-lines input-string)
+		 (list (if (loop :for sym :in (getf meta :symbols) :never (string= "⍺⍺" (string sym)))
+			   :fn :op)
+		       meta content))))
 
-      (let ((olnchar))
+      (let ((olnchar)
+	    (symbols))
 	;; the olnchar variable is needed to handle characters that may be functional or part
 	;; of a number based on their context; in APL it's the . character, which may begin a number like .5
 	;; or may work as the inner/outer product operator, as in 1 2 3+.×4 5 6.
@@ -777,7 +803,9 @@
 					(of-lexicon idiom :operators char)))))))
 	  (=destructure (_ item _ break rest)
 	      (=list (%any (?blank-character))
-		     (%or (=vex-closure "()" nil :disallow-linebreaks "{}")
+		     (%or (=vex-closure "()" nil :disallow-linebreaks "{}"
+					:symbol-collector
+					(lambda (meta) (setf symbols (append symbols (getf meta :symbols)))))
 			  (=vex-closure "[]" #'handle-axes)
 			  (=vex-closure "{}" #'handle-function)
 			  (=vex-errant-closing-character ")]}([{")
@@ -797,40 +825,48 @@
 						      (list char))))))
 			  (=transform (=subseq (%some (?token-character)))
 				      (lambda (string)
-					(funcall (of-utilities idiom :format-value)
-						 (string-upcase (idiom-name idiom))
-						 ;; if there's an overloaded token character passed in
-						 ;; the special precedent, prepend it to the token being processed
-						 (idiom-symbols idiom)
-						 (if (getf special-precedent :overloaded-num-char)
-						     (format nil "~a~a"
-							     (getf special-precedent :overloaded-num-char)
-							     string)
-						     string))))
+					(multiple-value-bind (formatted is-symbol)
+					    (funcall (of-utilities idiom :format-value)
+						     (string-upcase (idiom-name idiom))
+						     ;; if there's an overloaded token character passed in
+						     ;; the special precedent, prepend it to the token being processed
+						     (idiom-symbols idiom)
+						     (if (getf special-precedent :overloaded-num-char)
+							 (format nil "~a~a"
+						 		 (getf special-precedent :overloaded-num-char)
+						 		 string)
+							 string))
+					  (if is-symbol (setq symbols (cons formatted symbols)))
+					  formatted)))
 			  ;; this last clause returns the remainder of the input in case the input has either no
 			  ;; characters or only blank characters before the first line break
 			  (=subseq (%any (?satisfies 'characterp))))
 		     (%any (?blank-character))
 		     (=subseq (%any (?newline-character)))
 		     (=subseq (%any (?satisfies 'characterp))))
+	    ;; (print (list :sym symbols item special-precedent))
+	    (if (or symbols (member :symbols special-precedent))
+		(setf (getf special-precedent :symbols)
+		      (append symbols (getf special-precedent :symbols))))
 	    (if (and (not output) (stringp item) (< 0 (length item))
 		     (funcall (of-utilities idiom :match-newline-character)
 			      (aref item 0)))
 		;; if the string is passed back (minus any leading whitespace) because the string began with
 		;; a line break, parse again omitting the line break character
-		(parse (subseq item 1) (=vex-string idiom))
+		(parse (subseq item 1) (=vex-string idiom nil special-precedent))
 		(if (and (= 0 (length break))
 			 (< 0 (length rest)))
 		    (parse rest (=vex-string idiom (if output (if (not item) output (cons item output))
 						       (if item (list item)))
-					     (if olnchar (list :overloaded-num-char olnchar))))
+					     (append (if olnchar (list :overloaded-num-char olnchar))
+						     (list :symbols (getf special-precedent :symbols)))))
 		    (list (if (or (not item)
 				  (and (typep item 'sequence)
 				       (= 0 (length item)) (not string-found)))
 			      ;; return nothing if only an empty sequence results from parsing
 			      ;; unless an explicit empty string was parsed
 			      output (cons item output))
-			  rest)))))))))
+			  rest special-precedent)))))))))
 
 (defmacro set-composer-elements (name with &rest params)
   "Specify basic language elements for a Vex composer."
@@ -865,7 +901,8 @@
 				(idiom-composer-opening-patterns idiom))
 	   :when (or (not (getf special-params :omit))
 		     (not (member (getf pattern :name) (getf special-params :omit))))
-	   :do (multiple-value-bind (new-processed new-props remaining)
+	   :do ;; (print (list :pt (getf pattern :name) tokens))
+	     (multiple-value-bind (new-processed new-props remaining)
 		   (funcall (symbol-function (getf pattern :function))
 			    tokens space idiom (lambda (item &optional sub-props)
 						 (composer idiom space item nil sub-props))
@@ -966,14 +1003,19 @@ These are examples of the output of the three macro-builders above.
 		  :always (funcall (of-utilities idiom :match-token-character) c)))
 	     (process-lines (lines &optional output)
 	       (if (= 0 (length lines))
-		   output (destructuring-bind (out remaining)
+		   output (destructuring-bind (out remaining meta)
 			      (parse lines (=vex-string idiom))
-			    (process-lines remaining
-					   (if (null out)
-					       output (append output
-							      (list (composer idiom space out nil nil
-									      '((:special
-										 (:top-level t)))))))))))
+			    (let ((out ;;(funcall (or (of-utilities idiom :lexer-postprocess)
+					;;	    (lambda (a b c) a))
+					;;	out idiom space)
+				    out
+				    ))
+			      (process-lines remaining
+					     (if (null out)
+						 output (append output
+								(list (composer idiom space out nil nil
+										'((:special
+										   (:top-level t))))))))))))
 	     (get-item-refs (items-to-store &optional storing-functions)
 	       ;; Function or variable names passed as a string may be assigned literally as long as there are
 	       ;; no dashes present in them, so the variable name "iD" becomes iD within the idiom, whereas a
