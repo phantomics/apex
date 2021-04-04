@@ -1141,8 +1141,7 @@ It remains here as a standard against which to compare methods for composing APL
 								    (eql 'scalar-function
 									 (caadr inverse-spec-body))))
 							   '(:inverse-scalar-functions
-							     :inverse-scalar-dyadic-functions))
-						     ))
+							     :inverse-scalar-dyadic-functions))))
 				       ((eq :operators type)
 					`(:operators ,(if (eq :lateral function-type)
 							  :lateral-operators

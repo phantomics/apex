@@ -216,6 +216,8 @@
 									   :special))
 							     '(:special (:top-level t))))))
     			 items rest-items))
+	       (if (and axes (not items))
+		   (error "Encountered axes with no function, operator or value to the left."))
 	       (loop :while (not stopped)
 		  :do (or (if (and (listp item) (eq :axes (first item)))
 			      ;; if axes are encountered, process the axes and the preceding
