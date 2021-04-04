@@ -1488,14 +1488,14 @@
   (for "Lateral operator definition." "lop←{8 ⍺⍺ 5×2+⍵} ⋄ × lop 5" 280)
   (for "Pivotal operator definition." "pop←{(⍵ ⍵⍵ ⍺) ⍺⍺ (⍺ ⍵⍵ ⍵)} ⋄ 2-pop≤⊢3" -1)
   (for "Lateral recursive operator definition."
-       "rlop←{$[⍵<2000; ⍵,⍺⍺ ∇ 8 ⍺⍺ 2×2+⊃⍵; ⍵]} ⋄ × rlop 5" #(5 112 1824 29216))
+       "rlop←{$[⍵<2000;⍵,⍺⍺ ∇ 3 ⍺⍺ 2×2+⊃⍵;⍵]} ⋄ × rlop 5" #(5 42 264 1596 9588))
   (for "Inline lateral operator." "× {8 ⍺⍺ 5×2+⍵} 5" 280)
   (for "Inline pivotal operator." "2-{(⍵ ⍵⍵ ⍺) ⍺⍺ (⍺ ⍵⍵ ⍵)}≤⊢3" -1)
   (for "Inline lateral operator with left argument." "3 +{⍺ ⍺⍺ ⍵} 4" 7)
   (for "Inline pivotal operator with unused left operand." "3 +{⍺ ⍵⍵ ⍵}× 4" 12)
   (for "Function applied to result of pivotal operator." "∊∘.+⍨10 2" #(20 12 12 4))
   (for "Lateral operator within a defined function." "fn←{÷ {⍺⍺ ⍵} 1+⍵} ⋄ - fn 2" -1/3)
-  (for "Inline pivotal operator in parentheses with internal ⋄ breaks." "3 (+{⍺⍺ 2⋄⍺ ⍵⍵ ⍵}÷) 4" 3/4)
+  (for "Inline pivotal operator in parentheses with internal ⋄ breaks." "3 (+{⍺⍺ 2 ⋄ ⍺ ⍵⍵ ⍵}÷) 4" 3/4)
   (for "Operator composition of function within defined operator."
        "filter←{(⍺⍺¨⍵)/⍵} ⋄ {2|⍵} filter ⍳20" #(1 3 5 7 9 11 13 15 17 19))
   (for "Array processing function applied over nested array."
