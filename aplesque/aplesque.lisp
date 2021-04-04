@@ -1602,10 +1602,13 @@
 		     ;; 				(1+ (aref (first axes) (1- index))))))))
 		     ;;  (error (concatenate 'string "Dimension indices must be consecutive and within "
 		     ;; 			"the array's number of dimensions.")))
-		     ((< 1 (length (first axes)))
+		     ((or (integerp (first axes))
+			  (< 0 (length (first axes))))
 		      ;; TODO: eliminate consing here
-		      (let* ((axl (mapcar (lambda (item) (- item count-from))
-					  (array-to-list (first axes))))
+		      (let* ((axl (if (not (arrayp (first axes)))
+				      (list (first axes))
+				      (mapcar (lambda (item) (- item count-from))
+					      (array-to-list (first axes)))))
 			     (collapsed (apply #'* (mapcar (lambda (index) (nth index (dims input)))
 							   axl))))
 			(labels ((dproc (dms &optional index output)
