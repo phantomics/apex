@@ -161,9 +161,7 @@
 			 (values nil nil)))
 		    (valid-by-valence (values op-symbol (list :type (list :operator op-type))))
 		    (t (values nil nil)))))
-	  (if (and (or (eql :fn (first this-item))
-		       (eql :op (first this-item)))
-		   ;; (getf properties :inline)
+	  (if (and (eql :op (first this-item))
 		   (listp (first (last this-item))))
 	      (let* ((fn (first (last this-item)))
 		     (symbols-used (glean-symbols-from-tokens fn space))
@@ -261,9 +259,6 @@
     ((assign-axes axes)
      (setq prior-items items)
      (assign-element function-form function-props process-function (first (last preceding-properties)))
-     (if (eq :is-inline-operator function-form)
-	 (progn (setq items prior-items)
-		(assign-element function-form function-props process-operator)))
      (if (and (not function-form)
 	      (listp (first items))
 	      (eql :op (caar items))
@@ -526,11 +521,18 @@
      (if asop (assign-element symbol symbol-props process-value '(:symbol-overriding t))))
   (if asop (values (let* ((inverted (if (listp precedent) (invert-function precedent)))
 			  (inverted-symbol (if inverted (intern (concatenate 'string "𝕚∇" (string symbol))))))
+		     ;; dummy function initialization is carried out here as well as in the idiom's
+		     ;; :lexer-postprocess method in order to catch assignments of composed functions like
+		     ;; g←(3∘×); these are not recognized by :lexer-postprocess since it should not be aware
+		     ;; of operator composition conventions in the code it receives
 		     (if (is-workspace-value symbol)
-			 (makunbound (intern (string symbol) space)))
-		     (setf (symbol-function (intern (string symbol) space)) #'dummy-nargument-function)
+		      	 (makunbound (intern (string symbol) space)))
+		     (if (not (fboundp (intern (string symbol) space)))
+			 (setf (symbol-function (intern (string symbol) space)) #'dummy-nargument-function))
 		     (if inverted (progn (if (is-workspace-value inverted-symbol)
 					     (makunbound (intern (string inverted-symbol) space)))
+					 ;; TODO: should dummy function initialization for inverted
+					 ;; functions still take place at this stage?
 					 (setf (symbol-function (intern (string inverted-symbol) space))
 					       #'dummy-nargument-function)))
 		     (if (characterp precedent)
