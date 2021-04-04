@@ -202,7 +202,9 @@
   (labels ((derive-element (input)
 	     (if (characterp input)
 		 #\  (if (not (arrayp input))
-			 0 (derive-element (row-major-aref input 0))))))
+			 0 (if (= 0 (size input))
+			       (make-array (dims input))
+			       (derive-element (row-major-aref input 0)))))))
     (if (not (arrayp array))
 	(derive-element array)
 	(if (= 0 (size array))
@@ -215,9 +217,12 @@
 			       #'identity (lambda (item) (make-array nil :initial-element item)))
 			   (let ((first-element (if (< 0 (rank first-element))
 						    first-element (aref first-element))))
-			     (make-array (dims first-element)
-					 :element-type (element-type first-element)
-					 :initial-element (derive-element first-element))))))))))
+			     (if (and (arrayp first-element)
+				      (= 0 (size first-element)))
+				 first-element
+				 (make-array (dims first-element)
+					     :element-type (element-type first-element)
+					     :initial-element (derive-element first-element)))))))))))
 
 (defun assign-element-type (item)
   "Find a type suitable for an APL array to hold a given item."
