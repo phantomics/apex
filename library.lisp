@@ -233,11 +233,13 @@
   "Wrapper for [, catenate] incorporating (aplesque:catenate) and (aplesque:laminate)."
   (lambda (omega alpha &optional axes)
     (let ((axis *first-axis-or-nil*))
-      (if (floatp axis)
+      (if (and (floatp axis)
+	       (< double-float-epsilon (nth-value 1 (floor axis))))
 	  ;; laminate in the case of a fractional axis argument
 	  (laminate alpha omega (ceiling axis))
 	  ;; simply stack the arrays if there is no axis argument or it's an integer
-	  (catenate alpha omega (or axis (max 0 (1- (max (rank alpha) (rank omega))))))))))
+	  (catenate alpha omega (or (if axis (floor axis))
+				    (max 0 (1- (max (rank alpha) (rank omega))))))))))
 
 (defun catenate-on-first (index-origin)
   "Wrapper for [⍪ catenate first]; distinct from (catenate-arrays) because it does not provide the laminate functionality."
