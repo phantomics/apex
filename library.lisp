@@ -306,9 +306,7 @@
 				   (aref point 1))
 			       (disclose (pick-point (aref point 0) input))))))
       ;; TODO: swap out the vector-based point for an array-based point
-      (if (= 1 (array-total-size omega))
-	  (error "Right argument to dyadic [⊃ pick] may not be unitary.")
-	  (pick-point alpha omega)))))
+      (pick-point alpha omega))))
 
 (defun expand-array (degrees input axis metadata-symbol &key (compress-mode))
   "Wrapper for (aplesque:expand) implementing [/ replicate] and [\ expand]."
