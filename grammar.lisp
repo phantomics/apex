@@ -155,12 +155,16 @@
 	      (rest this-item)
 	    (let ((valid-by-valence (or (not (getf properties :valence))
 					(eq op-type (getf properties :valence)))))
-	      (cond ((and valid-by-valence (getf properties :glyph))
-		     (if (char= op-symbol (aref (string (getf properties :glyph)) 0))
-			 (values op-symbol (list :type (list :operator op-type)))
-			 (values nil nil)))
-		    (valid-by-valence (values op-symbol (list :type (list :operator op-type))))
-		    (t (values nil nil)))))
+	      (if (and valid-by-valence (characterp op-symbol)
+		       (char= #\∇ op-symbol))
+		  (values :operator-self-reference
+			  (list :type (list :operator op-type)))
+		  (cond ((and valid-by-valence (getf properties :glyph))
+			 (if (char= op-symbol (aref (string (getf properties :glyph)) 0))
+			     (values op-symbol (list :type (list :operator op-type)))
+			     (values nil nil)))
+			(valid-by-valence (values op-symbol (list :type (list :operator op-type))))
+			(t (values nil nil))))))
 	  (if (and (eql :op (first this-item))
 		   (listp (first (last this-item))))
 	      (let* ((fn (first (last this-item)))
@@ -299,7 +303,7 @@
 		 				     `(:special (:omit (:value-assignment :function-assignment
 		 							:operation :operator-assignment
 									:train-composition)
-								 ,@include-lexvar-symbols))))))
+								       ,@include-lexvar-symbols))))))
     (if symbol-referenced
 	;; call the operator constructor on the output of the operand constructor which integrates axes
 	(values (list 'apl-compose :op (list 'inws symbol-referenced)
@@ -320,13 +324,18 @@
 	(let ((operator (and (member :operator (getf operator-props :type))
 	      		     (member :lateral (getf operator-props :type))
 	      		     operator-form)))
-	  (if operator (values (cons 'apl-compose (cons (intern (string-upcase operator)
-								*package-name-string*)
-	      						(funcall (funcall (resolve-operator :lateral operator)
-	      								  operand-form (first operand-axes))
-	      							 (first operator-axes))))
-	      		       '(:type (:function :operator-composed :lateral))
-	      		       items))))))
+	  (if operator
+	      (if (eq :operator-self-reference operator-form)
+		  (values `(apl-compose :op ∇oself ,operand-form)
+			  '(:type (:function :operator-composed :lateral))
+	      		  items)
+		  (values (cons 'apl-compose (cons (intern (string-upcase operator)
+							   *package-name-string*)
+	      					   (funcall (funcall (resolve-operator :lateral operator)
+	      							     operand-form (first operand-axes))
+	      						    (first operator-axes))))
+	      		  '(:type (:function :operator-composed :lateral))
+	      		  items)))))))
 
 (composer-pattern composer-pattern-unitary-operation (operator-axes operator-form operator-props)
     ;; match a unitary operator like $
@@ -778,8 +787,9 @@
 	    (setq left-operand (list :char left-operand)))
 	(values (if (or (symbolp operator) (and (listp operator)
 						(member :pivotal (getf operator-props :type))))
-		    `(apl-compose :op ,(if (listp operator)
-					   operator (list 'inws operator))
+		    `(apl-compose :op ,(if (eq :operator-self-reference operator)
+					   '∇oself (if (listp operator)
+						       operator (list 'inws operator)))
 				  ,(if (listp left-operand)
 				       left-operand
 				       (if (characterp left-operand)
@@ -819,13 +829,19 @@
 						       ,@include-lexvar-symbols)))
 		(setq is-function (eq :function (first (getf function-props :type)))
 		      prior-items items)
+		;; (if (eql '⍺⍺ fn-element)
+		;;     (print (list :aa fn-element precedent items)))
 		(if is-function (assign-subprocessed value value-props
 						     `(:special (:omit (:value-assignment :function-assignment
 									:value-assignment-by-selection :branch
+									:lateral-composition
+									;; :pivotal-composition
 									:lateral-inline-composition
 		 							:operation :operator-assignment))
 						       ,@include-lexvar-symbols
 						       :valence :lateral)))
+		;; (if (eql '⍺⍺ fn-element)
+		;;     (print (list :val value)))
 		(if (not (eq :array (first (getf value-props :type))))
 		    (setq items prior-items value nil))
 		(if (and (not function-axes) (member :axes function-props))
@@ -842,6 +858,7 @@
 			 (fn-content (if (not (eq :self-reference fn-content))
 					 fn-content '#'∇self))
 			 (fn-sym (or-functional-character fn-element :fn)))
+		    ;; (print (list :fe fn-element))
 		    (values `(apl-call ,fn-sym ,fn-content ,precedent ,@(if value (list value))
 				       ,@(if function-axes `((list ,@(first function-axes)))))
 			    '(:type (:array :evaluated)) items))))

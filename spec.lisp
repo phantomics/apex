@@ -66,6 +66,7 @@
  (utilities :match-blank-character (lambda (char) (member char '(#\  #\Tab) :test #'char=))
 	    :match-newline-character (lambda (char) (member char '(#\⋄ #\◊ #\Newline #\Return) :test #'char=))
 	    :match-inline-newline-character (lambda (char) (member char '(#\⋄ #\◊) :test #'char=))
+	    :match-flagged-functional-character (lambda (char) (member char '(#\∇)))
 	    ;; set the language's valid blank, newline characters and token characters
 	    :match-token-character
 	    (lambda (char)
@@ -159,13 +160,30 @@
 	    				   (listp (second op-form))))
 	    	       '(:fn #\←) (guard symbol (and (symbolp symbol)
 	    					     (not (member symbol '(⍺⍺ ⍵⍵))))))
-		 (let ((symbol (intern (concatenate 'string
-						    (if (eq :lateral (getf (second op-form) :valence))
-							"𝕆𝕃∇" "𝕆ℙ∇")
+		 (let ((fn-symbol (intern (string symbol) space))
+		       (symbol (intern (concatenate 'string (if (eq :lateral (getf (second op-form)
+										   :valence))
+								"𝕆𝕃∇" "𝕆ℙ∇")
 						    (string symbol))
 				       space)))
+		   ;; if the symbol is already bound as a regular function, unbind it
+		   (if (fboundp fn-symbol) (fmakunbound fn-symbol))
 	    	   (if (not (fboundp symbol))
 	    	       (setf (symbol-function symbol) #'dummy-nargument-function)))))
+	      (labels ((processor (&optional disposition valence)
+			 (lambda (token list index)
+			   (if (and (third token) (listp (third token)))
+			       (assign-self-refs-among-tokens
+				(third token) (processor (if (intersection
+							      '(⍺⍺ ⍵⍵) (getf (second token) :symbols))
+							     :op :fn)
+							 (getf (second token) :valence)))
+			       (if (and (characterp (second token))
+					(char= #\∇ (second token)))
+				   (setf (nth index list)
+					 (list disposition valence #\∇)))))))
+		(assign-self-refs-among-tokens tokens (processor)))
+	      ;; (print (list :tout tokens))
 	      tokens)
 	    :postprocess-compiled
 	    (lambda (state &rest inline-arguments)
@@ -1466,9 +1484,11 @@
        "' ' (∊{⍺,⍵[⍺],⍵}≠⊆⊢) ' one two  three'" #(1 "one" "one" "two" "three"))
   (for "Five-element monadic fork function train including lateral and pivotal function compositions."
        "(⊢⌽⍨¯1+⍳∘≢)5 5⍴⍳25" #2A((1 2 3 4 5) (7 8 9 10 6) (13 14 15 11 12) (19 20 16 17 18) (25 21 22 23 24)))
-  (for "Recursive function." "f←{A←⍵-1 ⋄ $[A≥0;A,f A;0]} ⋄ f 5" #(4 3 2 1 0 0))
+  (for "Recursive function." "refn←{A←⍵-1 ⋄ $[A≥0;A,refn A;0]} ⋄ refn 5" #(4 3 2 1 0 0))
   (for "Lateral operator definition." "lop←{8 ⍺⍺ 5×2+⍵} ⋄ × lop 5" 280)
   (for "Pivotal operator definition." "pop←{(⍵ ⍵⍵ ⍺) ⍺⍺ (⍺ ⍵⍵ ⍵)} ⋄ 2-pop≤⊢3" -1)
+  (for "Lateral recursive operator definition."
+       "rlop←{$[⍵<2000; ⍵,⍺⍺ ∇ 8 ⍺⍺ 2×2+⊃⍵; ⍵]} ⋄ × rlop 5" #(5 112 1824 29216))
   (for "Inline lateral operator." "× {8 ⍺⍺ 5×2+⍵} 5" 280)
   (for "Inline pivotal operator." "2-{(⍵ ⍵⍵ ⍺) ⍺⍺ (⍺ ⍵⍵ ⍵)}≤⊢3" -1)
   (for "Inline lateral operator with left argument." "3 +{⍺ ⍺⍺ ⍵} 4" 7)

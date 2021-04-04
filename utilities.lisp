@@ -68,6 +68,10 @@
   `(labels ((∇self ,params ,@body))
      #'∇self))
 
+(defmacro olambda (params &body body)
+  `(labels ((∇oself ,params ,@body))
+     #'∇oself))
+
 (defmacro achoose (item indices &rest rest-params)
   (let ((indices-evaluated (gensym)))
     `(let ((,indices-evaluated ,indices))
@@ -635,7 +639,10 @@ It remains here as a standard against which to compare methods for composing APL
 (defmacro apl-compose (symbol &rest body)
   "A wrapper macro for macros that implement April's operators; functionally this macro does nothing but it improves the readability of April's compiled code."
   (declare (ignore symbol))
-  (macroexpand body))
+  (let ((expanded (macroexpand body)))
+    (if (or (not (listp (first expanded)))
+	    (not (eql 'olambda (caar expanded))))
+	expanded (cons 'funcall expanded))))
 
 (defmacro scalar-function (function)
   "Wrap a scalar function. This is a passthrough macro used by the scalar composition system in (apl-call)."
@@ -741,7 +748,7 @@ It remains here as a standard against which to compare methods for composing APL
 	(arguments (if arguments (mapcar (lambda (item) `(inws ,item)) arguments))))
     (funcall (if (not (intersection arg-symbols '(⍺⍺ ⍵⍵)))
 		 ;; the latter case wraps a user-defined operator
-		 #'identity (lambda (form) `(lambda (⍺⍺ &optional ⍵⍵)
+		 #'identity (lambda (form) `(olambda (⍺⍺ &optional ⍵⍵)
 					      (declare (ignorable ⍺⍺ ⍵⍵))
 					      ,form)))
 	     `(alambda ,(if arguments arguments `(⍵ &optional ⍺))
@@ -841,6 +848,15 @@ It remains here as a standard against which to compare methods for composing APL
 		 (declare (ignore ,is-dyadic))
 		 (if ,is-inverse ,inverted ,operand)))))))
   
+(defun assign-self-refs-among-tokens (tokens function)
+  "Find a list of symbols within a token list which are assigned with the [← gets] lexical function. Used to find lists of variables to hoist in lambda forms."
+  (loop :for token :in tokens :for tx :from 0
+     :do (if (listp token)
+	     (if (not (member (first token) '(:fn :op)))
+		 ;; recursively descend into lists, but not functions contained within a function
+		 (assign-self-refs-among-tokens token function)
+		 (funcall function token tokens tx)))))
+
 (defun glean-symbols-from-tokens (tokens space &optional token-list is-strand-assignment)
   "Find a list of symbols within a token list which are assigned with the [← gets] lexical function. Used to find lists of variables to hoist in lambda forms."
   (let ((previous-token)

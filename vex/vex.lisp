@@ -755,10 +755,15 @@
 		       (parse lines (=vex-string idiom nil meta))
 		     (process-lines remaining (append output (if out (list out)))
 				    meta))))
-	     (handle-axes (input-string)
-	       (let ((each-axis (funcall (of-utilities idiom :process-axis-string)
-					 input-string)))
-		 (cons :axes (mapcar #'first (mapcar #'process-lines each-axis)))))
+	     (handle-axes (symbol-collector)
+	       (lambda (input-string)
+		 (let* ((each-axis (funcall (of-utilities idiom :process-axis-string)
+					    input-string))
+			(each-axis-code (loop :for axis :in each-axis :collect
+					     (let ((output (process-lines axis)))
+					       (funcall symbol-collector (second output))
+					       (first output)))))
+		   (cons :axes each-axis-code))))
 	     (handle-function (input-string)
 	       (destructuring-bind (content meta) (process-lines input-string)
 	     	 (let* ((is-operator (intersection '("⍺⍺" "⍵⍵") (getf meta :symbols)
@@ -766,6 +771,7 @@
 			(is-operator-pivotal (member "⍵⍵" is-operator :test #'string=)))
 	     	   (if (and is-operator (not (getf meta :valence)))
 	     	       (setf (getf meta :valence) (if is-operator-pivotal :pivotal :lateral)))
+		   ;; (print (list :mt meta))
 	     	   (list (if is-operator :op :fn)
 	     		 meta content)))))
 
@@ -793,7 +799,9 @@
 		     (%or (=vex-closure "()" nil :disallow-linebreaks "{}"
 					:symbol-collector
 					(lambda (meta) (setf symbols (append symbols (getf meta :symbols)))))
-			  (=vex-closure "[]" #'handle-axes)
+			  (=vex-closure "[]" (handle-axes
+					      (lambda (meta) (setf symbols
+								   (append symbols (getf meta :symbols))))))
 			  (=vex-closure "{}" #'handle-function)
 			  (=vex-errant-closing-character ")]}([{")
 			  (=string #\' #\")
@@ -807,7 +815,8 @@
 						      (if (of-lexicon idiom :operators char)
 							  (list (if (of-lexicon idiom :pivotal-operators char)
 								    :pivotal
-								    (if (of-lexicon idiom :lateral-operators char)
+								    (if (of-lexicon idiom
+										    :lateral-operators char)
 									:lateral :unitary))))
 						      (list char))))))
 			  (=transform (=subseq (%some (?token-character)))
@@ -816,7 +825,8 @@
 					    (funcall (of-utilities idiom :format-value)
 						     (string-upcase (idiom-name idiom))
 						     ;; if there's an overloaded token character passed in
-						     ;; the special precedent, prepend it to the token being processed
+						     ;; the special precedent, prepend it to the token
+						     ;; being processed
 						     (idiom-symbols idiom)
 						     (if (getf special-precedent :overloaded-num-char)
 							 (format nil "~a~a"
