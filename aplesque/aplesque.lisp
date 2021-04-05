@@ -1893,7 +1893,7 @@
     (xdotimes output (o (size output))
       (let* ((acoords (make-array (rank input) :element-type 'fixnum))
 	     (oindices (let ((remaining o))
-			 (loop :for if :across in-factors :for od :in output-dims :for ix :from 0
+			 (loop :for if :across in-factors :for ix :from 0
 			    :for of :across out-factors :for melem :across movement
 			    :collect (multiple-value-bind (index remainder)
 					 ;; TODO: is this correct?
@@ -1927,7 +1927,6 @@
 		      (row-major-aref input rmi)))))
 	(setf (row-major-aref output o)
 	      (funcall process window acoords))))
-    (princ #\Newline)
     output))
 
 (defun count-segments (value precision &optional segments)
