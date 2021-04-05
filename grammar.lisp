@@ -52,7 +52,7 @@
 		  (getf properties :symbol-overriding))
 	      (not (member (intern (string-upcase this-item))
 			   (rest (assoc :function (idiom-symbols idiom)))))
-	      (not (member this-item '(⍺⍺ ⍵⍵) :test #'eql))
+	      (not (member this-item '(⍺⍺ ⍵⍵ ∇ ∇∇) :test #'eql))
 	      (or (not (getf properties :type))
 		  (eq :symbol (first (getf properties :type)))))
 	 (values (if (not (member (intern (string-upcase this-item))
@@ -92,7 +92,7 @@
 				  fn (cons (butlast (first fn) 1)
 					   (rest fn))))
 			  (symbols-used (glean-symbols-from-tokens fn space))
-			  (is-inline-operator (intersection '(⍺⍺ ⍵⍵) (rest (assoc :args symbols-used)))))
+			  (is-inline-operator (intersection '(⍺⍺ ⍵⍵ ∇∇) (rest (assoc :args symbols-used)))))
 		     (setf (rest (assoc :assigned symbols-used))
 			   (loop :for sym :in (rest (assoc :assigned symbols-used))
 			      :when (not (member sym (getf (getf properties :special) :lexvar-symbols)))
@@ -135,6 +135,8 @@
 		 (values (if (not (get-workspace-alias space this-item))
 			     this-item (get-workspace-alias space this-item))
 			 (list :type '(:function :referenced))))
+		((eql this-item '∇)
+		 (values this-item (list :type '(:function :self-reference))))
 		((member this-item '(⍵⍵ ⍺⍺))
 		 (values this-item (list :type '(:function :operator-reference))))
 		((member (intern (string-upcase this-item))
@@ -155,8 +157,7 @@
 	      (rest this-item)
 	    (let ((valid-by-valence (or (not (getf properties :valence))
 					(eq op-type (getf properties :valence)))))
-	      (if (and valid-by-valence (characterp op-symbol)
-		       (char= #\∇ op-symbol))
+	      (if (and valid-by-valence (eql '∇∇ op-symbol))
 		  (values :operator-self-reference
 			  (list :type (list :operator op-type)))
 		  (cond ((and valid-by-valence (getf properties :glyph))
@@ -831,8 +832,6 @@
 						       ,@include-lexvar-symbols)))
 		(setq is-function (eq :function (first (getf function-props :type)))
 		      prior-items items)
-		;; (if (eql '⍺⍺ fn-element)
-		;;     (print (list :aa fn-element precedent items)))
 		(if is-function (assign-subprocessed value value-props
 						     `(:special (:omit (:value-assignment :function-assignment
 									:value-assignment-by-selection :branch
@@ -842,14 +841,12 @@
 		 							:operation :operator-assignment))
 						       ,@include-lexvar-symbols
 						       :valence :lateral)))
-		;; (if (eql '⍺⍺ fn-element)
-		;;     (print (list :val value)))
 		(if (not (eq :array (first (getf value-props :type))))
 		    (setq items prior-items value nil))
 		(if (and (not function-axes) (member :axes function-props))
 		    (setq function-axes (getf function-props :axes))))))
   (if is-function (let* ((fn-content (if (or (functionp fn-element)
-					     (member fn-element '(⍺⍺ ⍵⍵))
+					     (member fn-element '(⍺⍺ ⍵⍵ ∇ ∇∇))
 					     (and (listp fn-element)
 						  (eql 'function (first fn-element))))
 					 fn-element (or (resolve-function (if value :dyadic :monadic)
@@ -857,10 +854,9 @@
 							(resolve-function :symbolic fn-element))))
 			 ;; the ∇ symbol resolving to :self-reference generates the #'∇self function used
 			 ;; as a self-reference by lambdas invoked through the (alambda) macro
-			 (fn-content (if (not (eq :self-reference fn-content))
+			 (fn-content (if (not (eql '∇ fn-content))
 					 fn-content '#'∇self))
 			 (fn-sym (or-functional-character fn-element :fn)))
-		    ;; (print (list :fe fn-element))
 		    (values `(apl-call ,fn-sym ,fn-content ,precedent ,@(if value (list value))
 				       ,@(if function-axes `((list ,@(first function-axes)))))
 			    '(:type (:array :evaluated)) items))))

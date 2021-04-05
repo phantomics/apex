@@ -66,12 +66,11 @@
  (utilities :match-blank-character (lambda (char) (member char '(#\  #\Tab) :test #'char=))
 	    :match-newline-character (lambda (char) (member char '(#\⋄ #\◊ #\Newline #\Return) :test #'char=))
 	    :match-inline-newline-character (lambda (char) (member char '(#\⋄ #\◊) :test #'char=))
-	    :match-flagged-functional-character (lambda (char) (member char '(#\∇)))
 	    ;; set the language's valid blank, newline characters and token characters
 	    :match-token-character
 	    (lambda (char)
 	      (or (alphanumericp char)
-		  (member char '(#\. #\_ #\⎕ #\∆ #\⍙ #\¯ #\⍺ #\⍵ #\⍬) :test #'char=)))
+		  (not (loop :for c :across "._⎕∆⍙∇¯⍺⍵⍬" :never (char= c char)))))
 	    ;; overloaded numeric characters may be functions or operators or may be part of a numeric token
 	    ;; depending on their context
 	    :match-overloaded-numeric-character (lambda (char) (char= #\. char))
@@ -161,29 +160,25 @@
 	    	       '(:fn #\←) (guard symbol (and (symbolp symbol)
 	    					     (not (member symbol '(⍺⍺ ⍵⍵))))))
 		 (let ((fn-symbol (intern (string symbol) space))
-		       (symbol (intern (concatenate 'string (if (eq :lateral (getf (second op-form)
-										   :valence))
-								"𝕆𝕃∇" "𝕆ℙ∇")
+		       (symbol (intern (concatenate 'string
+						    (if (eq :lateral (getf (second op-form) :valence))
+							"𝕆𝕃∇" "𝕆ℙ∇")
 						    (string symbol))
 				       space)))
 		   ;; if the symbol is already bound as a regular function, unbind it
 		   (if (fboundp fn-symbol) (fmakunbound fn-symbol))
 	    	   (if (not (fboundp symbol))
 	    	       (setf (symbol-function symbol) #'dummy-nargument-function)))))
-	      (labels ((processor (&optional disposition valence)
+	      (labels ((processor (&optional valence)
 			 (lambda (token list index)
-			   (if (and (third token) (listp (third token)))
-			       (assign-self-refs-among-tokens
-				(third token) (processor (if (intersection
-							      '(⍺⍺ ⍵⍵) (getf (second token) :symbols))
-							     :op :fn)
-							 (getf (second token) :valence)))
-			       (if (and (characterp (second token))
-					(char= #\∇ (second token)))
-				   (setf (nth index list)
-					 (list disposition valence #\∇)))))))
+			   (if (eql '∇∇ token)
+			       (setf (nth index list) (list :op valence '∇∇))
+			       (if (and (listp token) (listp (second token))
+					(third token))
+				   (assign-self-refs-among-tokens
+				    (third token)
+				    (processor (getf (second token) :valence))))))))
 		(assign-self-refs-among-tokens tokens (processor)))
-	      ;; (print (list :tout tokens))
 	      tokens)
 	    :postprocess-compiled
 	    (lambda (state &rest inline-arguments)
@@ -1004,9 +999,7 @@
 	    (is "x←1 ⋄ (3-2)→two three ⋄ x×←11 ⋄ one→⎕ ⋄ x×←3 ⋄ two→⎕ ⋄ x×←5 ⋄ three→⎕ ⋄ x×←7" 35)
 	    (is "x←1 ⋄ 0→two three     ⋄ x×←11 ⋄ one→⎕ ⋄ x×←3 ⋄ two→⎕ ⋄ x×←5 ⋄ three→⎕ ⋄ x×←7" 1155)))
   (∘ (has :title "Find Outer Product, Not Inner")
-     (symbolic :outer-product-designator))
-  (∇ (has :title "Function Self-Reference")
-     (symbolic :self-reference)))
+     (symbolic :outer-product-designator)))
 
  ;; APL's character-represented operators, which take one or two functions or arrays as input
  ;; and generate a function
@@ -1507,8 +1500,10 @@
   (for "Recursive function." "refn←{A←⍵-1 ⋄ $[A≥0;A,refn A;0]} ⋄ refn 5" #(4 3 2 1 0 0))
   (for "Lateral operator definition." "lop←{8 ⍺⍺ 5×2+⍵} ⋄ × lop 5" 280)
   (for "Pivotal operator definition." "pop←{(⍵ ⍵⍵ ⍺) ⍺⍺ (⍺ ⍵⍵ ⍵)} ⋄ 2-pop≤⊢3" -1)
-  (for "Lateral recursive operator definition."
-       "rlop←{$[⍵<2000;⍵,⍺⍺ ∇ 3 ⍺⍺ 2×2+⊃⍵;⍵]} ⋄ × rlop 5" #(5 42 264 1596 9588))
+  (for "Lateral recursive operator definition with reference to composed function."
+       "rlop←{$[⍵<2000;⍵,∇ 3 ⍺⍺ 2×2+⊃⍵;⍵]} ⋄ × rlop 5" #(5 42 264 1596 9588))
+  (for "Lateral recursive operator definition with self-reference."
+       "rlop←{$[⍵<2000;⍵,⍺⍺ ∇∇ 3 ⍺⍺ 2×2+⊃⍵;⍵]} ⋄ × rlop 5" #(5 42 264 1596 9588))
   (for "Inline lateral operator." "× {8 ⍺⍺ 5×2+⍵} 5" 280)
   (for "Inline pivotal operator." "2-{(⍵ ⍵⍵ ⍺) ⍺⍺ (⍺ ⍵⍵ ⍵)}≤⊢3" -1)
   (for "Inline lateral operator with left argument." "3 +{⍺ ⍺⍺ ⍵} 4" 7)

@@ -386,7 +386,7 @@
 	 ;; unless they're one element in which case the character is disclosed
 	 (if (= 3 (length element))
 	     (aref element 1) (subseq element 1 (1- (length element)))))
-	((member element '("⍺" "⍵" "⍺⍺" "⍵⍵") :test #'string=)
+	((member element '("⍺" "⍵" "∇" "⍺⍺" "⍵⍵" "∇∇") :test #'string=)
 	 ;; alpha and omega characters are directly changed to symbols in the April package
 	 (values (intern element idiom-name) t))
 	((numeric-string-p element)
@@ -858,11 +858,10 @@ It remains here as a standard against which to compare methods for composing APL
 (defun assign-self-refs-among-tokens (tokens function)
   "Find a list of symbols within a token list which are assigned with the [← gets] lexical function. Used to find lists of variables to hoist in lambda forms."
   (loop :for token :in tokens :for tx :from 0
-     :do (if (listp token)
-	     (if (not (member (first token) '(:fn :op)))
-		 ;; recursively descend into lists, but not functions contained within a function
-		 (assign-self-refs-among-tokens token function)
-		 (funcall function token tokens tx)))))
+     :do (if (and (listp token) (not (member (first token) '(:fn :op))))
+	     ;; recursively descend into lists, but not functions contained within a function
+	     (assign-self-refs-among-tokens token function)
+	     (funcall function token tokens tx))))
 
 (defun glean-symbols-from-tokens (tokens space &optional token-list is-strand-assignment)
   "Find a list of symbols within a token list which are assigned with the [← gets] lexical function. Used to find lists of variables to hoist in lambda forms."
