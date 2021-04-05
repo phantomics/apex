@@ -1851,47 +1851,8 @@
 
 (defun stencil (input process window-dims movement)
   "Apply a given function to sub-arrays of an array with specified dimensions sampled according to a given pattern of movement across the array."
-  (let* ((idims (apply #'vector (dims input)))
-	 (output-dims (loop :for dim :below (length window-dims)
-			 :collect (ceiling (- (/ (aref idims dim) (aref movement dim))
-					      (if (and (evenp (aref window-dims dim))
-						       (or (= 1 (aref movement dim))
-							   (oddp (aref idims dim))))
-						  1 0)))))
-	 (output (make-array output-dims))
-	 (ref-coords (loop :for d :across window-dims :collect 0))
-	 (acoords (loop :for d :in output-dims :collect 0)))
-    (across output (lambda (elem coords)
-		     (declare (ignore elem))
-		     (let ((window (make-array (array-to-list window-dims) :element-type (element-type input))))
-		       (across window (lambda (welem wcoords)
-					(declare (ignore welem))
-					(dotimes (cix (length wcoords))
-					  (setf (nth cix ref-coords)
-						(let ((melem (aref movement cix))
-						      (wdim (aref window-dims cix)))
-						  (+ (nth cix wcoords)
-						     (- (* melem (nth cix coords))
-							(floor (- wdim (if (evenp wdim) 1 0)) 2))))))
-					(setf (apply #'aref window wcoords)
-					      (if (not (loop :for coord :in ref-coords :for cix :from 0
-							  :always (<= 0 coord (1- (aref idims cix)))))
-						  (apl-array-prototype input)
-						  (apply #'aref input ref-coords)))))
-		       (loop :for coord :in coords :for cix :from 0
-			  :do (setf (nth cix acoords)
-				    (* (aref movement cix)
-				       (if (= 0 coord) 1 (if (= coord (1- (nth cix output-dims)))
-							     -1 0)))))
-		       (setf (apply #'aref output coords)
-			     (funcall process window (make-array (length coords) :initial-contents acoords
-								 :element-type '(signed-byte 8)))))))
-    output))
-
-(defun stencil-parallel (input process window-dims movement)
-  "Apply a given function to sub-arrays of an array with specified dimensions sampled according to a given pattern of movement across the array."
   (let* ((irank (rank input))
-	 (idims (apply #'vector (dims input))) (last-dim)
+	 (idims (apply #'vector (dims input)))
 	 (wrank (length window-dims))
 	 (output-dims (loop :for dim :below (length window-dims)
 			 :collect (ceiling (- (/ (aref idims dim) (aref movement dim))
@@ -1900,46 +1861,65 @@
 							   (oddp (aref idims dim))))
 						  1 0)))))
 	 (in-factors (make-array (rank input) :element-type 'fixnum))
+	 (out-factors (make-array (rank input) :element-type 'fixnum))
 	 (win-factors (make-array wrank :element-type 'fixnum))
 	 (output (make-array output-dims))
 	 (ref-coords (loop :for d :across window-dims :collect 0))
-	 (acoords (loop :for d :in output-dims :collect 0)))
+	 (acoords (loop :for d :in output-dims :collect 0))
+	 (last-dim))
     
-    ;; generate dimensional factors vectors for input and output
+    ;; generate dimensional factors vector for window dimensions
     (loop :for dx :below (length window-dims)
        :do (let ((d (aref window-dims (- wrank 1 dx))))
 	     (setf (aref win-factors (- wrank 1 dx))
 		   (if (= 0 dx) 1 (* last-dim (aref win-factors (- wrank dx))))
 		   last-dim d)))
     
-    ;; generate dimensional factors vectors for input and output
+    ;; generate dimensional factors vector for input
     (loop :for dx :below (rank input)
        :do (let ((d (aref idims (- irank 1 dx))))
 	     (setf (aref in-factors (- irank 1 dx))
 		   (if (= 0 dx) 1 (* last-dim (aref in-factors (- irank dx))))
 		   last-dim d)))
     
+    ;; generate dimensional factors vector for output
+    (loop :for d :in output-dims :for dx :from 0
+       :do (setf (aref out-factors (- irank 1 dx))
+		 (if (= 0 dx) 1 (* last-dim (aref out-factors (- irank dx))))
+		 last-dim d))
+
+    ;; (print (list :ao in-factors out-factors win-factors window-dims movement out-factors))
+    
     (xdotimes output (o (size output))
       (let* ((acoords (make-array (rank input) :element-type 'fixnum))
 	     (oindices (let ((remaining o))
 			 (loop :for if :across in-factors :for od :in output-dims :for ix :from 0
-			    :collect (multiple-value-bind (index remainder) (floor remaining if)
-				       (setf remaining remainder
-					     (aref acoords ix)
-					     (* (aref movement ix)
-						(if (= 0 index) 1 (if (= index (1- od)) -1 0))))
+			    :for of :across out-factors :for melem :across movement
+			    :collect (multiple-value-bind (index remainder)
+					 ;; TODO: is this correct?
+					 (floor remaining (if (= 1 (rank input)) if (* melem of)))
+				       (setf remaining remainder)
 				       index))))
 	     (window (make-array (array-to-list window-dims) :element-type (element-type input))))
+	;; (print (list :oin oindices))
 	(dotimes (w (size window))
 	  (let ((remaining w) (rmi 0) (valid t))
-	    (loop :for cix :below wrank :for wf :across win-factors :for oindex :in oindices
-	       :for melem :across movement :for wdim :across window-dims :while valid
+	    (loop :for cix :below wrank :for wf :across win-factors
+	       :for oindex :in oindices :for if :across in-factors :for idim :across idims
+	       :for melem :across movement :for wdim :across window-dims ;; :while valid
 	       :do (multiple-value-bind (index remainder) (floor remaining wf)
 		     (let ((this-index (+ index (- (* melem oindex)
 						   (floor (- wdim (if (evenp wdim) 1 0)) 2)))))
-		       (setq remaining remainder)
+		       (setf remaining remainder
+			     (aref acoords cix) (if (> 0 this-index)
+			     			    (max (aref acoords cix)
+			     				 (abs this-index))
+			     			    (if (<= idim this-index)
+			     				(min (aref acoords cix)
+			     				     (- (- this-index (1- idim))))
+			     				(aref acoords cix))))
 		       (if (<= 0 this-index (1- (aref idims cix)))
-			   (setq rmi (+ rmi (* this-index wf)))
+			   (setq rmi (+ rmi (* this-index if)))
 			   (setq valid nil)))))
 	    (setf (row-major-aref window w)
 		  (if (not valid)
@@ -1947,6 +1927,7 @@
 		      (row-major-aref input rmi)))))
 	(setf (row-major-aref output o)
 	      (funcall process window acoords))))
+    (princ #\Newline)
     output))
 
 (defun count-segments (value precision &optional segments)

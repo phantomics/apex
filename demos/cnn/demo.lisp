@@ -71,7 +71,7 @@ b         ← 10⍴÷10
 index     ← 1
 startTime ← timeFactors⊥¯4↑⎕ts
 
-⎕ ← 'Running Zhang with ',(⍕epochs),' epochs, batchSize ',(⍕batchSize),','
+⎕ ← 'Running Zhang with ',(⍕epochs),' epochs, batch size ',(⍕batchSize),','
 ⎕ ← (⍕trainings),' training images, ',(⍕tests),' tests and a rate of ',(⍕rate),'.'
 ⎕ ← '  ' ⋄ ⎕ ← '--' ⋄ ⎕ ← '  '
 
