@@ -1400,6 +1400,8 @@
        "a←2 3⍴⍳9 ⋄ a[1;2]←20 ⋄ a" #2A((1 20 3) (4 5 6)))
   (for "Assignment of enclosed array to multiple indices of an array."
        "a←⍳9 ⋄ a[3 6]←⊂9 8 ⋄ a" #(1 2 #(9 8) 4 5 #(9 8) 7 8 9))
+  (for "Assignment to copy of an array." "a←3 3⍴⍳9 ⋄ b←a ⋄ b[1;]←0 ⋄ a,b"
+       #2A((1 2 3 0 0 0) (4 5 6 4 5 6) (7 8 9 7 8 9)))
   (for "Strand assignment of variables including a system variable."
        "(x ⎕IO y)←10 0 2 ⋄ x+y×⍳5" #(10 12 14 16 18))
   (for "Strand assignment of nested scalar variable."

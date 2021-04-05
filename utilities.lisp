@@ -183,11 +183,18 @@
   "Indent a code string produced by (print-and-run) as appropriate for April's test output."
   (concatenate 'string "  * " (regex-replace-all "[\\n]" string (format nil "~%    "))))
 
+(defun duplicate (object)
+  (if (not (arrayp object))
+      object (copy-array object)))
+
 (defmacro apl-assign (symbol value)
   "This is macro is used to build variable assignment forms and includes logic for stranded assignments."
   (if (or (not (listp symbol))
 	  (eql 'inws (first symbol)))
-      `(setq ,symbol ,value)
+      `(setq ,symbol ,(if (not (or (symbolp value)
+				   (and (listp value)
+					(eql 'inws (first value)))))
+			  value `(duplicate ,value)))
       (let ((assign-forms) (values (gensym "A"))
 	    (symbols (if (not (eql 'avector (first symbol)))
 			 symbol (rest symbol))))
