@@ -9,7 +9,7 @@
 
 (defvar *alphabet-vector* "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-(defvar *idiom-native-symbols* '(⍺ ⍵ ⍺⍺ ⍵⍵ index-origin print-precision *digit-vector* *alphabet-vector*
+(defvar *idiom-native-symbols* '(⍺ ⍵ ⍺⍺ ⍵⍵ ∇ ∇∇ index-origin print-precision *digit-vector* *alphabet-vector*
 				 *apl-timestamp* to-output output-stream))
 
 (let ((circular-functions ;; APL's set of circular functions called using the ○ symbol with a left argument
@@ -1309,7 +1309,7 @@
 		(declare (ignore workspace))
 		(let ((condition (gensym)))
 		  (labels ((build-clauses (clauses)
-			     `(let ((,condition (disclose ,(first clauses))))
+			     `(let ((,condition (disclose-atom ,(first clauses))))
 				(if (or (not (integerp ,condition))
 					(/= 0 ,condition))
 				    ,(second clauses)

@@ -58,6 +58,12 @@
 			     (funcall (formatter "𝕊~W") s (second list)) 
 			     (pprint-fill s list))))
 
+(defun disclose-atom (item)
+  "If the argument is a non-nested array with only one member, disclose it, otherwise do nothing."
+  (if (not (and (not (stringp item)) (arrayp item) (is-unitary item)
+		(not (arrayp (row-major-aref item 0)))))
+      item (row-major-aref item 0)))
+
 (defmacro insym (symbol)
   "Macro used in grammar.lisp to intern value-referencing symbols in appropriate workspace package."
   `(if (or (not (symbolp ,symbol))
