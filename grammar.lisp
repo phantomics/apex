@@ -234,7 +234,8 @@
 			      ;; if a closure is encountered, recurse to process it
 			      (multiple-value-bind (output properties remaining)
 				  (funcall process item (if (member :top-level
-								    (getf (first (last preceding-properties)) :special))
+								    (getf (first (last preceding-properties))
+									  :special))
 							    '(:special (:top-level t))))
 				(if (eq :array (first (getf properties :type)))
 				    (setq items rest-items
@@ -247,12 +248,10 @@
 						value-props (cons value-properties value-props))))
 			  (setq stopped t))))
 	(if value-elements
-	    (values (if (member :statements (getf properties :special))
-			(cons 'progn (reverse value-elements))
-			(axes-enclose (output-value space (if (< 1 (length value-elements))
-							      value-elements (first value-elements))
-						    value-props)
-				      axes))
+	    (values (axes-enclose (output-value space (if (< 1 (length value-elements))
+							  value-elements (first value-elements))
+						value-props)
+				  axes)
 		    '(:type (:array :explicit))
 		    items)
 	    (values nil nil tokens))))))
@@ -828,7 +827,7 @@
      (if (eq :array (first preceding-type))
 	 (progn (assign-subprocessed fn-element function-props
 				     `(:special (:omit (:function-assignment :value-assignment-by-selection
-									     :train-composition)
+									     :train-composition :operation)
 						       ,@include-lexvar-symbols)))
 		(setq is-function (eq :function (first (getf function-props :type)))
 		      prior-items items)
@@ -844,9 +843,7 @@
 		(if (not (eq :array (first (getf value-props :type))))
 		    (setq items prior-items value nil))
 		(if (and (not function-axes) (member :axes function-props))
-		    (setq function-axes (getf function-props :axes)))))
-     ;; (print (list :ffr fn-element))
-     )
+		    (setq function-axes (getf function-props :axes))))))
   (if is-function (let* ((fn-content (if (or (functionp fn-element)
 					     (member fn-element '(⍺⍺ ⍵⍵ ∇ ∇∇))
 					     (and (listp fn-element)
@@ -859,7 +856,6 @@
 			 (fn-content (if (not (eql '∇ fn-content))
 					 fn-content '#'∇self))
 			 (fn-sym (or-functional-character fn-element :fn)))
-		    ;; (print (list :fc fn-content))
 		    (values `(apl-call ,fn-sym ,fn-content ,precedent ,@(if value (list value))
 				       ,@(if function-axes `((list ,@(first function-axes)))))
 			    '(:type (:array :evaluated)) items))))

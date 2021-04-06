@@ -478,7 +478,6 @@
 
 (defun section (input dimensions &key (inverse nil) (populator nil))
   "Take a subsection of an array of the same rank and given dimensions as per APL's ↑ function, or invert the function as per APL's ↓ function to take the elements of an array excepting a specific dimensional range."
-  ;; (print (list :iin input dimensions))
   (if (= 0 (rank input))
       (if inverse (make-array 0)
 	  (let* ((prototype (apl-array-prototype input))

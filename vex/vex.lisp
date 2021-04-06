@@ -898,8 +898,7 @@
 				(idiom-composer-opening-patterns idiom))
 	   :when (or (not (getf special-params :omit))
 		     (not (member (getf pattern :name) (getf special-params :omit))))
-	   :do ;; (print (list :pt (getf pattern :name) tokens))
-	     (multiple-value-bind (new-processed new-props remaining)
+	   :do (multiple-value-bind (new-processed new-props remaining)
 		   (funcall (symbol-function (getf pattern :function))
 			    tokens space idiom (lambda (item &optional sub-props)
 						 (composer idiom space item nil sub-props))
@@ -915,8 +914,9 @@
      properties-sym preceding-properties-sym special-props-sym items-sym item-sym rest-items-sym)
   (let ((name (gensym)) (var-names (gensym))
 	(assignment-clauses (gensym)) (generation (gensym)) (out-form (gensym)) (out-props (gensym))
-	(axis (gensym)) (symbol (gensym)) (symbol-form (gensym)) (symbol-props (gensym)) (function (gensym))
-	(prec-spec (gensym)) (form-out (gensym)) (form-properties (gensym)) (remaining (gensym))
+	(axis (gensym)) (subax (gensym)) (symbol (gensym)) (symbol-form (gensym)) (symbol-props (gensym))
+	(function (gensym)) (prec-spec (gensym)) (form-out (gensym))
+	(form-properties (gensym)) (remaining (gensym))
 	(args-list (list tokens-sym space-sym idiom-sym process-sym '&optional precedent-sym properties-sym
 			 preceding-properties-sym items-sym item-sym rest-items-sym)))
     `(progn (defmacro ,(first macro-names) (,name ,var-names ,assignment-clauses &body ,generation)
@@ -936,8 +936,9 @@
 	    (defmacro ,(second macro-names) (,symbol)
 	      `(if (and (listp ,',item-sym) (eql :axes (first ,',item-sym)))
 		   (setq ,,symbol (list (loop :for ,',axis :in (rest ,',item-sym)
-					   :collect (funcall ,',process-sym ,',axis
-							     '(:special (:statements t)))))
+					   :collect (cons 'progn
+							  (loop :for ,',subax :in ,',axis
+							     :collect (funcall ,',process-sym ,',subax)))))
     			 ,',items-sym ,',rest-items-sym)))
 	    (defmacro ,(third macro-names) (,symbol-form ,symbol-props ,function &optional ,properties-sym)
 	      `(multiple-value-bind (,',form-out ,',form-properties)
