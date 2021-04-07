@@ -7,7 +7,7 @@
 ;; http://dfns.dyalog.com/s_path.htm
 
 ; directed graph.
-(april "g← (2 3) (3) (2 4) (1 5) (3)")
+(april "g←(2 3) (3) (2 4) (1 5) (3)")
 
 ; single vertex→vertex path.
 (april "g path 2 1 ")

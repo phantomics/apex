@@ -936,9 +936,12 @@
 	    (defmacro ,(second macro-names) (,symbol)
 	      `(if (and (listp ,',item-sym) (eql :axes (first ,',item-sym)))
 		   (setq ,,symbol (list (loop :for ,',axis :in (rest ,',item-sym)
-					   :collect (cons 'progn
-							  (loop :for ,',subax :in ,',axis
-							     :collect (funcall ,',process-sym ,',subax)))))
+					   :collect (funcall (lambda (item)
+							        (if (< 1 (length item))
+							      	   (cons 'progn item)
+							      	   (first item)))
+							     (loop :for ,',subax :in ,',axis
+								:collect (funcall ,',process-sym ,',subax)))))
     			 ,',items-sym ,',rest-items-sym)))
 	    (defmacro ,(third macro-names) (,symbol-form ,symbol-props ,function &optional ,properties-sym)
 	      `(multiple-value-bind (,',form-out ,',form-properties)
