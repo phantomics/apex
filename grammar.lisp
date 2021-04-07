@@ -13,7 +13,7 @@
 (defun process-value (this-item properties process idiom space)
   ;; TODO: add a passthrough value mode for symbols that are being assigned!
   ;; this is the only way to get them assignable after the first time
-  (cond ((and (listp this-item)
+  (cond ((and (listp this-item) ;; TODO: break this out into an is-closure predicate
 	      (not (member (first this-item) '(:fn :op :axes))))
 	 ;; if the item is a closure, evaluate it and return the result
 	 (multiple-value-bind (output out-properties)
@@ -385,43 +385,43 @@
     (asop asop-props selection-form sform-specs)
     ;; "Match a selective value assignment like (3↑x)←5."
     ((assign-element asop asop-props process-function '(:glyph ←))
-     (if asop (let ((items (if (not (listp (first items)))
-			       items (first items))))
-		(assign-subprocessed selection-form sform-specs
-				     '(:special (:omit (:value-assignment :function-assignment))))))
+     (if (and asop (and (listp (first items))
+			(not (member (caar items) '(:fn :op :axes)))))
+	 (let ((items (first items)))
+	   (assign-subprocessed selection-form sform-specs
+				'(:special (:omit (:value-assignment :function-assignment))))))
      (if selection-form (setf items (rest items))))
   (if (and selection-form (listp selection-form) (eql 'apl-call (first selection-form)))
       (multiple-value-bind (sel-form sel-item placeholder set-form)
 	  (generate-selection-form selection-form space)
-	(values (if sel-form
-		    ;; generate an array whose each cell is its row-major index, perform the
-		    ;; subtractive function on it and then use assign-selected to assign new values
-		    ;; to the cells at the remaining indices of the original array
-		    (if sel-item
-			(let ((item (gensym)) (indices (gensym)) (prec (gensym)))
-			  `(let* ((,item ,sel-item)
-				  (,placeholder (generate-index-array ,item))
-				  (,prec ,precedent)
-				  (,indices (enclose-atom ,sel-form))
-				  ,@(if set-form `((,placeholder
-						    (make-array nil :initial-element
-								(assign-selected (disclose ,item)
-										 ,indices ,prec))))))
-			     ,(funcall (lambda (form)
-					 (if (not (or (symbolp sel-item)
-						      (and (listp sel-item)
-					      		   (eql 'inws (first sel-item))
-					      		   (symbolp (second sel-item)))))
-					     ;; the assigned value is returned at the end so
-					     ;; things like a←⍳5 ⋄ b←(3⊃a)←30 ⋄ a b work
-					     form `(progn (apl-assign ,sel-item ,form)
-							  ,prec)))
-				       (or set-form `(assign-selected ,sel-item ,indices ,prec)))))
+	(if sel-form
+	    ;; generate an array whose each cell is its row-major index, perform the subtractive function
+	    ;; on it and then use assign-selected to assign new values to the cells at the remaining
+	    ;; indices of the original array
+	    (values (if sel-item (let ((item (gensym)) (indices (gensym)) (prec (gensym)))
+				   `(let* ((,item ,sel-item)
+					   (,placeholder (generate-index-array ,item))
+					   (,prec ,precedent)
+					   (,indices (enclose-atom ,sel-form))
+					   ,@(if set-form `((,placeholder
+							     (make-array nil :initial-element
+									 (assign-selected (disclose ,item)
+											  ,indices ,prec))))))
+				      ,(funcall (lambda (form)
+						  (if (not (or (symbolp sel-item)
+							       (and (listp sel-item)
+					      			    (eql 'inws (first sel-item))
+					      			    (symbolp (second sel-item)))))
+						      ;; the assigned value is returned at the end so
+						      ;; things like a←⍳5 ⋄ b←(3⊃a)←30 ⋄ a b work
+						      form `(progn (apl-assign ,sel-item ,form)
+								   ,prec)))
+						(or set-form `(assign-selected ,sel-item ,indices ,prec)))))
 			(let ((output (gensym)))
 			  `(let* ((,placeholder ,precedent)
 				  (,output ,sel-form))
-			     (if ,output (setf ,set-form ,output))))))
-		'(:type (:array :assigned)) items))))
+			     (if ,output (setf ,set-form ,output)))))
+		    '(:type (:array :assigned)) items)))))
 
 (composer-pattern value-assignment-standard
     (asop asop-props axes symbol symbol-props symbols symbols-props symbols-list preceding-type)
@@ -430,6 +430,7 @@
      (if (and (eq :array (first preceding-type))
 	      (not (member :value-assignment (getf special-props :omit))))
 	 (assign-element asop asop-props process-function '(:glyph ←)))
+     ;; (print (list :as asop tokens))
      (if asop (labels ((get-symbol-list (list &optional inner)
 			 (let ((valid t))
 			   (if (listp list)

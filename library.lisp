@@ -569,7 +569,10 @@
 			 ;; recursively descend through the expression in search of an expression containing
 			 ;; the variable and one of the four functions usable for selective assignment
 			 (if (and (listp first-arg) (eql 'apl-call (first first-arg)))
-			     `(apl-call ,fn-symbol ,fn-form ,(process-form first-arg) ,@rest)
+			     (let ((processed (process-form first-arg)))
+			       ;; only build the recursive expression if a valid expression
+			       ;; was successfully found inside
+			       (if processed `(apl-call ,fn-symbol ,fn-form ,processed ,@rest)))
 			     (if (or (eql fn-symbol '⌷)
 				     (atin-aliased fn-symbol))
 				 ;; assigning to a [⌷ at index] form is an just an alternate version

@@ -1232,6 +1232,7 @@
      (tests (is "fn←{2+⍵}⍣3 ⋄ fn 5" 11)
   	    (is "{2+⍵}⍣3⊢9" 15)
   	    (is "2{⍺×2+⍵}⍣3⊢9" 100)
+	    (is "{3×⍵}⍣(g←3)⊢5" 135)
   	    (is "fn←{2+⍵}⍣{10<⍺} ⋄ fn 2" 12)
   	    (is "fn←{2+⍵}⍣{10<⍵} ⋄ fn 2" 14)
   	    (is "fn←{⍵×2} ⋄ fn⍣3⊢4" 32)
@@ -1314,7 +1315,7 @@
 	    (is "3+$[5>6;1;7>8;2;3]" 6)
 	    (is "{⍵+5}⍣$[3>2;4;5]⊢2" 22)
 	    (is "{$[⍵>5;G←3⋄H←5⋄G+H;C←8⋄D←2⋄C×D]}¨3 7" #(16 8))
-	    (is "{$[⍵<3;5;3⋄-{⍺⍺ ⍵} ⍵]}¨⍳9" #(5 5 -3 -4 -5 -6 -7 -8 -9)))))
+	    (is "{$[⍵<3;5;e←⍵+2⋄-{⍺⍺ ⍵} e]}¨⍳9" #(5 5 -5 -6 -7 -8 -9 -10 -11)))))
 
  ;; tests for general language functions not associated with a particular function or operator
  (test-set
@@ -1442,6 +1443,7 @@
        "x←3⍴⊂⍳4 ⋄ (1↑⊃x[1])←99 ⋄ x" #(#(99 2 3 4) #(1 2 3 4) #(1 2 3 4)))
   (for "Multiple assignment with selective assignment in midstream."
        "a←⍳5 ⋄ b←(3⊃a)←30 ⋄ a b" #(#(1 2 30 4 5) 30))
+  (for "Print the result of a function applied to assignment." "⎕←⍴x←1 2 3 ⋄ x" #(1 2 3))
   (for "Assignment of dynamic variable within function."
        "jje←3 ⋄ bob←{jje+←⍵ ⋄ jje} ⋄ bob 5" 8)
   (for "Index of variable with value assigned inside its own index."

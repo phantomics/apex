@@ -514,7 +514,9 @@
 		   (or (eql 'lambda (first reference))
 		       (and (symbolp (first reference))
 			    (macro-function (first reference))
-			    (not (member (first reference) '(avector apl-call apl-if))))))
+			    (not (member (first reference)
+					 ;; TODO: this will cause a problem if a function is passed and assigned
+					 '(avector apl-call apl-if apl-output apl-assign))))))
 	      reference))))
 
 (defmacro resolve-operator (mode reference)
