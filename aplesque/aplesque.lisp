@@ -1852,19 +1852,19 @@
   "Apply a given function to sub-arrays of an array with specified dimensions sampled according to a given pattern of movement across the array."
   (let* ((irank (rank input))
 	 (idims (apply #'vector (dims input)))
-	 (wrank (length window-dims))
+	 (wd-list) (wrank (length window-dims))
 	 (output-dims (loop :for dim :below (length window-dims)
 			 :collect (ceiling (- (/ (aref idims dim) (aref movement dim))
 					      (if (and (evenp (aref window-dims dim))
 						       (or (= 1 (aref movement dim))
 							   (oddp (aref idims dim))))
 						  1 0)))))
-	 (in-factors (make-array (rank input) :element-type 'fixnum))
-	 (out-factors (make-array (rank input) :element-type 'fixnum))
+	 (in-factors (make-array irank :element-type 'fixnum))
+	 (out-factors (make-array wrank :element-type 'fixnum))
 	 (win-factors (make-array wrank :element-type 'fixnum))
 	 (output (make-array output-dims))
-	 (ref-coords (loop :for d :across window-dims :collect 0))
-	 (acoords (loop :for d :in output-dims :collect 0))
+	 (ref-coords (loop :for d :below wrank :collect 0))
+	 (acoords (loop :for d :below wrank :collect 0))
 	 (last-dim))
     
     ;; generate dimensional factors vector for window dimensions
@@ -1872,8 +1872,9 @@
        :do (let ((d (aref window-dims (- wrank 1 dx))))
 	     (setf (aref win-factors (- wrank 1 dx))
 		   (if (= 0 dx) 1 (* last-dim (aref win-factors (- wrank dx))))
+		   wd-list (cons d wd-list)
 		   last-dim d)))
-    
+
     ;; generate dimensional factors vector for input
     (loop :for dx :below (rank input)
        :do (let ((d (aref idims (- irank 1 dx))))
@@ -1888,13 +1889,13 @@
 		 last-dim d))
 
     (xdotimes output (o (size output))
-      (let* ((acoords (make-array (rank input) :element-type 'fixnum))
+      (let* ((acoords (make-array irank :element-type 'fixnum))
 	     (oindices (let ((remaining o))
-			 (loop :for of :across out-factors :for ix :from 0
+			 (loop :for of :across out-factors
 			    :collect (multiple-value-bind (index remainder) (floor remaining of)
 				       (setf remaining remainder)
 				       index))))
-	     (window (make-array (array-to-list window-dims) :element-type (element-type input))))
+	     (window (make-array wd-list :element-type (element-type input))))
 	(dotimes (w (size window))
 	  (let ((remaining w) (rmi 0) (valid t))
 	    (loop :for cix :below wrank :for wf :across win-factors
