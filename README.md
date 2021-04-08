@@ -349,7 +349,7 @@ As mentioned before, you can see demos of April's functions with:
 
 ### (with)
 
-`(with)` is the workhorse of April parameters, allowing you to configure your April instance in many ways. The most common sub-parameter passed via `(with)` is `(:state)`. To wit:
+`(with)` is the workhorse of April parameters, allowing you to specify many options for an April invocation. The most common sub-parameter passed via `(with)` is `(:state)`. To wit:
 
 ```lisp
 * (april (with (:state :count-from 0

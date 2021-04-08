@@ -1848,6 +1848,52 @@
     det ;; return determinant
     out-matrix))
 
+;; (defun stencil (input process window-dims movement)
+;;   "Apply a given function to sub-arrays of an array with specified dimensions sampled according to a given pattern of movement across the array."
+;;   (let* ((idims (apply #'vector (dims input)))
+;; 	 (output-dims (loop :for dim :below (length window-dims)
+;; 			 :collect (ceiling (- (/ (aref idims dim) (aref movement dim))
+;; 					      (if (and (evenp (aref window-dims dim))
+;; 						       (or (= 1 (aref movement dim))
+;; 							   (oddp (aref idims dim))))
+;; 						  1 0)))))
+;; 	 (output (make-array output-dims))
+;; 	 (ref-coords (loop :for d :across window-dims :collect 0))
+;; 	 (acoords (loop :for d :in output-dims :collect 0)))
+;;     (across output (lambda (elem coords)
+;; 		     (declare (ignore elem))
+;; 		     (print (list :co coords))
+;; 		     (let ((window (make-array (array-to-list window-dims) :element-type (element-type input))))
+;; 		       (across window (lambda (welem wcoords)
+;; 					(declare (ignore welem))
+;; 					(dotimes (cix (length wcoords))
+;; 					  (setf (nth cix ref-coords)
+;; 						(let ((melem (aref movement cix))
+;; 						      (wdim (aref window-dims cix)))
+;; 						  (+ (nth cix wcoords)
+;; 						     (- (* melem (nth cix coords))
+;; 							(floor (- wdim (if (evenp wdim) 1 0)) 2))))))
+;; 					;; (print (list :ww wcoords ref-coords
+;; 					;; 	     (loop :for coord :in ref-coords :for cix :from 0
+;; 					;; 		:always (<= 0 coord (1- (aref idims cix))))
+;; 					;; 	     (if (loop :for coord :in ref-coords :for cix :from 0
+;; 					;; 		    :always (<= 0 coord (1- (aref idims cix))))
+;; 					;; 		 (apply #'aref input ref-coords))))
+;; 					(setf (apply #'aref window wcoords)
+;; 					      (if (not (loop :for coord :in ref-coords :for cix :from 0
+;; 							  :always (<= 0 coord (1- (aref idims cix)))))
+;; 						  (apl-array-prototype input)
+;; 						  (apply #'aref input ref-coords)))))
+;; 		       (loop :for coord :in coords :for cix :from 0
+;; 			  :do (setf (nth cix acoords)
+;; 				    (* (aref movement cix)
+;; 				       (if (= 0 coord) 1 (if (= coord (1- (nth cix output-dims)))
+;; 							     -1 0)))))
+;; 		       (setf (apply #'aref output coords)
+;; 			     (funcall process window (make-array (length coords) :initial-contents acoords
+;; 								 :element-type '(signed-byte 8)))))))
+;;     output))
+
 (defun stencil (input process window-dims movement)
   "Apply a given function to sub-arrays of an array with specified dimensions sampled according to a given pattern of movement across the array."
   (let* ((irank (rank input))
@@ -1859,6 +1905,7 @@
 						       (or (= 1 (aref movement dim))
 							   (oddp (aref idims dim))))
 						  1 0)))))
+	 (orank (length output-dims))
 	 (in-factors (make-array (rank input) :element-type 'fixnum))
 	 (out-factors (make-array (rank input) :element-type 'fixnum))
 	 (win-factors (make-array wrank :element-type 'fixnum))
@@ -1882,25 +1929,19 @@
 		   last-dim d)))
     
     ;; generate dimensional factors vector for output
-    (loop :for d :in output-dims :for dx :from 0
+    (loop :for d :in (reverse output-dims) :for dx :from 0
        :do (setf (aref out-factors (- irank 1 dx))
 		 (if (= 0 dx) 1 (* last-dim (aref out-factors (- irank dx))))
 		 last-dim d))
 
-    ;; (print (list :ao in-factors out-factors win-factors window-dims movement out-factors))
-    
     (xdotimes output (o (size output))
       (let* ((acoords (make-array (rank input) :element-type 'fixnum))
 	     (oindices (let ((remaining o))
-			 (loop :for if :across in-factors :for ix :from 0
-			    :for of :across out-factors :for melem :across movement
-			    :collect (multiple-value-bind (index remainder)
-					 ;; TODO: is this correct?
-					 (floor remaining (if (= 1 (rank input)) if (* melem of)))
+			 (loop :for of :across out-factors :for ix :from 0
+			    :collect (multiple-value-bind (index remainder) (floor remaining of)
 				       (setf remaining remainder)
 				       index))))
 	     (window (make-array (array-to-list window-dims) :element-type (element-type input))))
-	;; (print (list :oin oindices))
 	(dotimes (w (size window))
 	  (let ((remaining w) (rmi 0) (valid t))
 	    (loop :for cix :below wrank :for wf :across win-factors
