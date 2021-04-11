@@ -1384,6 +1384,7 @@
   (for "Index of vector of strings." "'abc' 'def' 'ghi'[2]" #0A"def")
   (for "Indexing with empty vectors to create n-dimensional empty arrays."
        "a←3 4⍴⍳12 ⋄ ⍴a[⍬;]" #(0 4))
+  (for "Indexing with variables." "x←3 3⍴⍳9 ⋄ y←1 ⋄ x[;y]" #(1 4 7))
   (for "Application of functions to indexed array elements."
        "g←2 3 4 5 ⋄ 9,g[2],3 4" #(9 3 3 4))
   (for "Assignment of an element within an array."
