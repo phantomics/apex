@@ -732,8 +732,10 @@
 						  (parse string-content (=vex-string idiom))
 						(if symbol-collector (funcall symbol-collector meta))
 						parsed))))
-			    (?eq (aref boundary-chars 1)))
-		   enclosed)))
+			    (%any (?eq (aref boundary-chars 1))))
+		   (if (= 0 balance)
+		       enclosed (error "No closing ~a found for opening ~a."
+				       (aref boundary-chars 1) (aref boundary-chars 0))))))
 	     (=vex-errant-closing-character (boundary-chars)
 	       (let ((errant-char) (matching-char)
 		     (chars-count (/ (length boundary-chars) 2)))
