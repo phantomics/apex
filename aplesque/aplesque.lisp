@@ -704,7 +704,12 @@
 				       :element-type (if (arrayp input)
 							 (element-type input)
 							 (assign-element-type input))
-				       :initial-element (apl-array-prototype input))))
+				       :initial-element (apl-array-prototype input)))
+		   (idiv-size (reduce #'* (loop :for d :in (dims input) :for dx :from 0
+		   	 		     :when (>= dx axis) :collect d)))
+		   (odiv-size (reduce #'* (loop :for d :in (dims input) :for dx :from 0
+					     :when (> dx axis) :collect d :when (= dx axis)
+					     :collect (aref c-degrees (1- (length degrees)))))))
 	       ;; in compress-mode: degrees must = length of axis,
 	       ;; zeroes are omitted from output, negatives add zeroes
 	       ;; otherwise: zeroes pass through, negatives add zeroes, degrees>0 must = length of axis
@@ -717,14 +722,20 @@
 			   (setf (aref output (+ ix (if (= 0 degree) 0 (aref c-degrees (1- degree)))))
 				 value)))))
 		   (xdotimes output (i (size input))
-		     (let* ((iseg (if (< 1 section-size) section-size (nth axis (dims input))))
-			    (oseg (floor i iseg)) (ivix (mod i iseg))
-			    (sub-index (if (= 1 section-size) ivix oseg))
-		    	    (dx (if compress-mode sub-index (aref positive-indices sub-index)))
-		   	    (offset (if (= 0 dx) 0 (aref c-degrees (1- dx)))))
+		     (let* ((iseg (floor i idiv-size))
+			    ;; input segment index
+			    (dx (funcall (if compress-mode #'identity (lambda (x) (aref positive-indices x)))
+					 ;; degree index; which degree is being expressed
+					 (floor (mod i idiv-size) section-size))))
 		       (dotimes (d (aref degrees dx))
-		       	 (setf (row-major-aref output (+ (if (< 1 section-size) ivix (* ex-dim oseg))
-							 (* d section-size) (* offset section-size)))
+			 ;; output index is: the degree iteration × the section size,
+			 ;; plus the segment index × the output division length
+			 ;; plus the input index modulo the section size,
+			 ;; plus the section size × the degree offset
+			 (setf (row-major-aref output (+ (* d section-size)
+							 (* iseg odiv-size) (mod i section-size)
+		   					 (* section-size
+							    (if (= dx 0) 0 (aref c-degrees (1- dx))))))
 		       	       (row-major-aref input i))))))
 	       output)))))
 

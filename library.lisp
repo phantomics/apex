@@ -487,7 +487,8 @@
 			  (loop :for i :from (- (* av2 (1+ a)) 2) :downto (* av2 a)
 			     :do (setf (row-major-aref afactors i) (* (row-major-aref alpha (1+ i))
 								      (row-major-aref afactors (1+ i))))))
-			(xdotimes output (i (size output))
+			;; (xdotimes output (i (size output))
+			(dotimes (i (size output))
     			  (multiple-value-bind (a o) (floor i olvector)
       			    (let ((result 0))
     			      (loop :for index :below av2
@@ -500,6 +501,22 @@
     	       (setq factor (* factor (row-major-aref alpha (min i (1- av2))))))
 	  (setq output result)))
     output))
+
+
+#|
+
+(dotimes (i (size output))
+(multiple-value-bind (a o) (floor i olvector)
+(let ((result 0))
+(loop :for index :below av2
+:do ;;(print (list :iin index (+ index (* a av2))))
+(incf result (* (row-major-aref omega (+ o (* olvector index)))
+;; (row-major-aref afactors (mod (+ index (* a av2))
+;; 				   (size afactors)))
+(row-major-aref afactors index);(+ index (* a av2)))
+)))
+(setf (row-major-aref output i) result))))
+|#
 
 (defun left-invert-matrix (in-matrix)
   "Perform left inversion of matrix. Used to implement [⌹ matrix inverse]."
