@@ -481,19 +481,21 @@
 				   adims (append (butlast adims 1) (list ovector)))
 			       :initial-element 1))
 	 (asegments (reduce #'* (butlast adims 1)))
-	 (av2 (first (last (dims alpha)))))
-
+	 (av2 (first (last (dims alpha))))
+	 (out-section (reduce #'* (rest odims))))
     (if out-dims (progn (dotimes (a asegments)
 			  (loop :for i :from (- (* av2 (1+ a)) 2) :downto (* av2 a)
 			     :do (setf (row-major-aref afactors i) (* (row-major-aref alpha (1+ i))
 								      (row-major-aref afactors (1+ i))))))
-			;; (xdotimes output (i (size output))
-			(dotimes (i (size output))
+			(xdotimes output (i (size output))
     			  (multiple-value-bind (a o) (floor i olvector)
       			    (let ((result 0))
     			      (loop :for index :below av2
-    	      			 :do (incf result (* (row-major-aref omega (+ o (* olvector index)))
-    	      					     (row-major-aref afactors (+ index (* a av2))))))
+    	      			 :do (incf result (* (row-major-aref omega (mod (+ (mod i out-section)
+										   (* out-section index))
+										(size omega)))
+    	      					     (row-major-aref afactors
+								     (+ index (* av2 (floor i out-section)))))))
     			      (setf (row-major-aref output i) result)))))
     	(let ((result 0) (factor 1))
     	  (loop :for i :from (1- (if (< 1 av2) av2 ovector)) :downto 0
@@ -501,22 +503,6 @@
     	       (setq factor (* factor (row-major-aref alpha (min i (1- av2))))))
 	  (setq output result)))
     output))
-
-
-#|
-
-(dotimes (i (size output))
-(multiple-value-bind (a o) (floor i olvector)
-(let ((result 0))
-(loop :for index :below av2
-:do ;;(print (list :iin index (+ index (* a av2))))
-(incf result (* (row-major-aref omega (+ o (* olvector index)))
-;; (row-major-aref afactors (mod (+ index (* a av2))
-;; 				   (size afactors)))
-(row-major-aref afactors index);(+ index (* a av2)))
-)))
-(setf (row-major-aref output i) result))))
-|#
 
 (defun left-invert-matrix (in-matrix)
   "Perform left inversion of matrix. Used to implement [⌹ matrix inverse]."
