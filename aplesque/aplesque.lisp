@@ -1421,7 +1421,7 @@
 				    (setf (row-major-aref output i)
 					  (row-major-aref input i))))
 			      output))
-	  output)
+	  (values set output))
 	;; if a single index is specified, from the output, just retrieve its value
 	(if (not output) (enclose (row-major-aref input (row-major-aref rmindices 0)))
 	    (progn (xdotimes output (o (length rmindices))

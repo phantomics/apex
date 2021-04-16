@@ -131,22 +131,24 @@
       (if (and (numberp alpha)
 	       (= index-origin alpha))
 	  omega (error "Invalid index."))
-      (choose omega (let ((coords (funcall (if (arrayp alpha) #'array-to-list #'list)
-					   (apply-scalar #'- alpha index-origin)))
-			  ;; the inefficient array-to-list is used here in case of nested
-			  ;; alpha arguments like (⊂1 2 3)⌷...
-			  (axis (if axes (if (vectorp (first axes))
-					     (loop :for item :across (first axes)
-						:collect (- item index-origin))
-					     (if (integerp (first axes))
-						 (list (- (first axes) index-origin)))))))
-		      (if (not axis)
-			  ;; pad coordinates with nil elements in the case of an elided reference
-			  (append coords (loop :for i :below (- (rank omega) (length coords)) :collect nil))
-			  (loop :for dim :below (rank omega)
-			     :collect (if (member dim axis) (first coords))
-			     :when (member dim axis) :do (setq coords (rest coords)))))
-	      :set to-set)))
+      (multiple-value-bind (assignment-output assigned-array)
+	  (choose omega (let ((coords (funcall (if (arrayp alpha) #'array-to-list #'list)
+					       (apply-scalar #'- alpha index-origin)))
+			      ;; the inefficient array-to-list is used here in case of nested
+			      ;; alpha arguments like (⊂1 2 3)⌷...
+			      (axis (if axes (if (vectorp (first axes))
+						 (loop :for item :across (first axes)
+						    :collect (- item index-origin))
+						 (if (integerp (first axes))
+						     (list (- (first axes) index-origin)))))))
+			  (if (not axis)
+			      ;; pad coordinates with nil elements in the case of an elided reference
+			      (append coords (loop :for i :below (- (rank omega) (length coords)) :collect nil))
+			      (loop :for dim :below (rank omega)
+				 :collect (if (member dim axis) (first coords))
+				 :when (member dim axis) :do (setq coords (rest coords)))))
+		  :set to-set)
+	(or assigned-array assignment-output))))
 
 (defun find-depth (omega)
   "Find the depth of an array, wrapping (aplesque:array-depth). Used to implement [≡ depth]."
@@ -959,17 +961,18 @@
 		  omega-copy))))
 	;; if the right argument is an array of rank > 1, assign the left operand values or apply the
 	;; left operand function as per choose or reach indexing
-	(choose omega (if (not right-fn)
-			  (append (list (apl-call - (scalar-function -) right 1))
-				  (loop :for i :below (1- (rank omega)) :collect nil)))
-		:set (if (not (or left-fn-m left-fn-d)) left)
-		:set-by (if (or left-fn-m left-fn-d right-fn)
-			    (lambda (old &optional new)
-			      (declare (ignorable new))
-			      (if (and right-fn (= 0 (funcall right-fn old)))
-				  old (if (not (or left-fn-m left-fn-d))
-					  new (if alpha (funcall left-fn-d old alpha)
-						  (funcall left-fn-m old))))))))))
+	(nth-value
+	 1 (choose omega (if (not right-fn)
+			     (append (list (apl-call - (scalar-function -) right 1))
+				     (loop :for i :below (1- (rank omega)) :collect nil)))
+		   :set (if (not (or left-fn-m left-fn-d)) left)
+		   :set-by (if (or left-fn-m left-fn-d right-fn)
+			       (lambda (old &optional new)
+				 (declare (ignorable new))
+				 (if (and right-fn (= 0 (funcall right-fn old)))
+				     old (if (not (or left-fn-m left-fn-d))
+					     new (if alpha (funcall left-fn-d old alpha)
+						     (funcall left-fn-m old)))))))))))
 
 (defun operate-stenciling (right-value left-function)
   "Generate a function applying a function via (aplesque:stencil) to an array. Used to implement [⌺ stencil]."

@@ -129,7 +129,7 @@
 	    (lambda (state)
 	      ;; the index origin, print precision and output stream values are
 	      ;; passed into the local lexical environment
-	      (append (list (list (intern "OUTPUT-STREAM" "APRIL")
+	      (append (list (list (intern "OUTPUT-STREAM" *package-name-string*)
 				  (if (getf state :print-to)
 				      (getf state :print-to)
 				      (second (getf state :output-stream)))))

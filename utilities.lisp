@@ -695,18 +695,19 @@ It remains here as a standard against which to compare methods for composing APL
 (defun enclose-axes (body axis-sets &key (set) (set-by))
   "Apply axes to an array, with the ability to handle multiple sets of axes as in (6 8 5⍴⍳9)[1 4;;2 1][1;2 4 5;]."
   (let ((axes (first axis-sets))
-	(assignment-output (gensym)))
+	(assignment-output (gensym)) (assigned-array (gensym)))
     (if (not axis-sets)
 	body (enclose-axes
-	      (if set `(let ((,assignment-output
-			      (achoose ,body (mapcar (lambda (array)
-						       (if array (apply-scalar #'- array index-origin)))
-						     (list ,@axes))
-				       :set ,set ,@(if set-by (list :set-by set-by))
-				       ;; setting the modify-input parameter so that the original value
-				       ;; is modified in place if possible
-				       :modify-input t)))
-			 (if ,assignment-output (setf ,body ,assignment-output)))
+	      (if set `(multiple-value-bind (,assignment-output ,assigned-array)
+			   (achoose ,body (mapcar (lambda (array)
+						    (if array (apply-scalar #'- array index-origin)))
+						  (list ,@axes))
+				    :set ,set ,@(if set-by (list :set-by set-by))
+				    ;; setting the modify-input parameter so that the original value
+				    ;; is modified in place if possible
+				    :modify-input t)
+			 (if ,assigned-array (setf ,body ,assigned-array))
+			 ,assignment-output)
 		  `(achoose ,body (mapcar (lambda (array) (if array (apply-scalar #'- array index-origin)))
 					  (list ,@axes))))
 	      (rest axis-sets)))))
