@@ -835,8 +835,8 @@
 		(if is-function (assign-subprocessed value value-props
 						     `(:special (:omit (:value-assignment :function-assignment
 									:value-assignment-by-selection :branch
+									:value-assignment-by-function-result
 									:lateral-composition
-									;; :pivotal-composition
 									:lateral-inline-composition
 		 							:operation :operator-assignment))
 						       ,@include-lexvar-symbols

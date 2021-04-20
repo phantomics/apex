@@ -1445,6 +1445,8 @@
   (for "Assignment by function at index." "a←3 2 1 ⋄ a[2]+←5 ⋄ a" #(3 7 1))
   (for "Elided assignment of applied function's results."
        "a←2 3 4⍴⍳9 ⋄ a[2;;3]+←10 ⋄ a" #3A(((1 2 3 4) (5 6 7 8) (9 1 2 3)) ((4 5 16 7) (8 9 11 2) (3 4 15 6))))
+  (for "Assignment by function result of array after after function applied."
+       "q←3×1-⍨3 3⍴⍳4 ⋄ p←4 4⍴1 ⋄ p[⍳3;⍳3]×←q=0 ⋄ p" #2A((1 0 0 1) (0 1 0 1) (0 0 1 1) (1 1 1 1)))
   (for "Operation over portions of an array."
        "a←4 8⍴⍳9 ⋄ a[2 4;1 6 7 8]+←10 ⋄ a"
        #2A((1 2 3 4 5 6 7 8) (19 1 2 3 4 15 16 17)
