@@ -1297,8 +1297,11 @@
 	 (if (or if (let ((dims idims))
 		      (loop :while dims :collect (reduce #'* (setq dims (rest dims)))))))
 	 (fif (first if))
-	 (start (or start 0)) (at-index-end (not (rest idims))))
-    (cond ((null fic) ;; a nil axis is elided; all indices on dimension traversed
+	 (start (or start 0))
+	 (at-index-end (not (rest idims))))
+    (cond ((and at-index-end (second ic))
+	   (error "Too many indices for array of rank ~a." (length idims)))
+	  ((null fic) ;; a nil axis is elided; all indices on dimension traversed
 	   (dotimes (i (first idims))
 	     (if at-index-end (vector-push (+ start i) out-vector)
 		 (axes-to-indices (rest ic) (rest idims) out-vector
