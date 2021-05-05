@@ -287,7 +287,8 @@
 	    (is "3⌊0 1 2 3 4 5" #(0 1 2 3 3 3))))
   (? (has :titles ("Random" "Deal"))
      (ambivalent (scalar-function (λω (if (integerp omega)
-					  (if (= 0 omega) (random 1.0d0)
+					  (if (= 0 omega) (+ double-float-epsilon
+							     (random (- 1.0d0 (* 2 double-float-epsilon))))
 					      (+ index-origin (random omega)))
 					  (if (floatp omega)
 					      (random omega)
