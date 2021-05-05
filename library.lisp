@@ -192,7 +192,7 @@
   (let* ((indices) (match-count 0)
 	 (orank (rank omega)))
     (if (= 0 orank)
-	(if (= 1 omega) 1 0)
+	(if (= 1 omega) #(#()) #())
 	(progn (across omega (lambda (index coords)
 			       ;; (declare (dynamic-extent index coords))
 			       (if (= 1 index)
