@@ -505,7 +505,7 @@
 					(assign-element-type (row-major-aref input 0))))
 	  (let* ((isize (size input)) (irank (rank input))
 		 (rdiff (- irank (length dimensions)))
-		 (idims (make-array irank :element-type (list 'integer 0 isize)
+		 (idims (make-array irank :element-type (if (= 0 isize) t (list 'integer 0 isize))
 				    :initial-contents (dims input))))
 	    (if (< 0 rdiff)
 		(setq dimensions (make-array irank :element-type 'fixnum
