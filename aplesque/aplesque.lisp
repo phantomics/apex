@@ -50,6 +50,10 @@
 			 ,@body)))))
 	       (pdotimes ,(append clause (list nil free-threads)) ,@body))))))
 
+(defun duplicate (object)
+  (if (not (arrayp object))
+      object (copy-array object)))
+
 (defun get-dimensional-factors (dimensions)
   (let ((factor) (last-index))
     (reverse (loop :for d :in (reverse dimensions) :for dx :from 0
@@ -504,9 +508,10 @@
 		 (idims (make-array irank :element-type (list 'integer 0 isize)
 				    :initial-contents (dims input))))
 	    (if (< 0 rdiff)
-		(setq dimensions (make-array irank :element-type (list 'integer 0 isize)
+		(setq dimensions (make-array irank :element-type 'fixnum
 					     :initial-contents (loop :for x :below irank
-								  :collect (if (< x rdiff) (aref dimensions x)
+								  :collect (if (< x (- irank rdiff))
+									       (aref dimensions x)
 									       (if inverse 0 (aref idims x))))))
 		(if (> 0 rdiff) (error "Too many subscripts (~w) for input array of rank ~w."
 				       (length dimensions) irank)))
@@ -1423,7 +1428,7 @@
 			      output))
 	  (values set output))
 	;; if a single index is specified, from the output, just retrieve its value
-	(if (not output) (enclose (row-major-aref input (row-major-aref rmindices 0)))
+	(if (not output) (enclose (duplicate (row-major-aref input (row-major-aref rmindices 0))))
 	    (progn (xdotimes output (o (length rmindices))
 		     (let ((i (aref rmindices o)))
 		       (setf (row-major-aref output o)

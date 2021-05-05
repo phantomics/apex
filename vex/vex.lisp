@@ -1002,8 +1002,9 @@ These are examples of the output of the three macro-builders above.
 		   dest (progn (setf (getf dest (first source)) (second source))
 			       (assign-from (cddr source) dest))))
 	     (validate-var-symbol (symbol)
-	       (loop :for c :across (string symbol)
-		  :always (funcall (of-utilities idiom :match-token-character) c)))
+	       (let ((string-sym (if (stringp symbol) symbol (lisp->camel-case symbol))))
+		 (loop :for c :across string-sym
+		    :always (funcall (of-utilities idiom :match-token-character) c))))
 	     (process-lines (lines &optional output)
 	       (if (= 0 (length lines))
 		   output (destructuring-bind (out remaining meta)

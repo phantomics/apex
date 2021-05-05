@@ -618,7 +618,9 @@
 					   #2A((#2A((0 0) (0 0)) 0) (0 #2A((0 0) (0 0))))
 					   #2A((#2A((0 0) (0 0)) 0) (0 #2A((0 0) (0 0))))))
 	    (is "2↑⍬ ⍬ ⍬ ⍬ ⍬" #(#() #()))
-	    (is "8↑3⍴⊂0 0 0⍴1" #(#3A() #3A() #3A() #3A() #3A() #3A() #3A() #3A()))))
+	    (is "8↑3⍴⊂0 0 0⍴1" #(#3A() #3A() #3A() #3A() #3A() #3A() #3A() #3A()))
+	    (is "1↑2 3 4⍴⍳9" #3A(((1 2 3 4) (5 6 7 8) (9 1 2 3))))
+	    (is "1 2↑2 3 4⍴⍳9" #3A(((1 2 3 4) (5 6 7 8))))))
   (↓ (has :titles ("Split" "Drop"))
      (ambivalent (λωχ (split-array omega *last-axis*))
 		 (section-array index-origin (quote (inws *value-meta*)) t))
@@ -647,10 +649,12 @@
   	    (is "1↓[2]2 3 4⍴⍳9" #3A(((5 6 7 8) (9 1 2 3)) ((8 9 1 2) (3 4 5 6))))
   	    (is "2↓[2]2 3 4⍴⍳9" #3A(((9 1 2 3)) ((3 4 5 6))))
   	    (is "2↓[3]2 3 4⍴⍳9" #3A(((3 4) (7 8) (2 3)) ((6 7) (1 2) (5 6))))
-	    (april "2 2↓[2 3]3 4 5⍴⍳9" #3A(((4 5 6) (9 1 2)) ((6 7 8) (2 3 4)) ((8 9 1) (4 5 6))))
+	    (is "2 2↓[2 3]3 4 5⍴⍳9" #3A(((4 5 6) (9 1 2)) ((6 7 8) (2 3 4)) ((8 9 1) (4 5 6))))
   	    (is "¯2↓⍳9" #(1 2 3 4 5 6 7))
   	    (is "¯2 ¯2↓5 8⍴⍳9" #2A((1 2 3 4 5 6) (9 1 2 3 4 5) (8 9 1 2 3 4)))
-  	    (is "4 5↓2 3⍴1" #2A())))
+  	    (is "4 5↓2 3⍴1" #2A())
+	    (is "1↓2 3 4⍴⍳9" #3A(((4 5 6 7) (8 9 1 2) (3 4 5 6))))
+	    (is "1 1↓2 3 4⍴⍳9" #3A(((8 9 1 2) (3 4 5 6))))))
   (⊂ (has :titles ("Enclose" "Partitioned Enclose"))
      (ambivalent (λωχ (if axes (re-enclose omega (aops:each (lambda (axis) (- axis index-origin))
   							    (if (arrayp (first axes))
@@ -1481,13 +1485,13 @@
        "y[⍋y←1 8 4 2]" #(1 2 4 8))
   (for "Inline pivotal operation-derived function expression."
        "1 2 3 (∘.+) 4 5 6" #2A((5 6 7) (6 7 8) (7 8 9)))
-  (for "Composed pivotal operation-derived function expression."
-       "1 2 3∘(×.+)⊢4 5 6" 315)
-  (for "Multiple composed pivotal operations called in sequence."
-       "(4 5 6∘(∘.×)) (1 2 3∘(∘.+)) 10 20 30"
-       #3A(((44 84 124) (48 88 128) (52 92 132))
-	   ((55 105 155) (60 110 160) (65 115 165))
-	   ((66 126 186) (72 132 192) (78 138 198))))
+  ;; (for "Composed pivotal operation-derived function expression."
+  ;;     "1 2 3∘(×.+)⊢4 5 6" 315)
+  ;; (for "Multiple composed pivotal operations called in sequence."
+  ;;      "(4 5 6∘(∘.×)) (1 2 3∘(∘.+)) 10 20 30"
+  ;;      #3A(((44 84 124) (48 88 128) (52 92 132))
+  ;; 	   ((55 105 155) (60 110 160) (65 115 165))
+  ;; 	   ((66 126 186) (72 132 192) (78 138 198))))
   (for "Two-element monadic atop function train." "(↓⌽)4 5⍴⍳20"
        #(#(5 4 3 2 1) #(10 9 8 7 6) #(15 14 13 12 11) #(20 19 18 17 16)))
   (for "Two-element dyadic atop function train." "'mississippi'(⍸∊)'sp'" #(3 4 6 7 9 10))
@@ -1583,10 +1587,10 @@
   (for "Commutative inversion of addition."       "+⍨⍣¯1⊢64" 32)
   (for "Commutative inversion of multiplication." "×⍨⍣¯1⊢64" 8.0)
   (for "Commutative inversion of max and min."    "(⌈⍨⍣¯1⊢64),⌊⍨⍣¯1⊢64" #(64 64))
-  (for "Inversion of commuted outer product." "((∘.×)∘4 5 6)⍣¯1⊢1 2 3∘.×4 5 6" #(1 2 3))
-  (for "Inversion of commuted outer product, other side." "(1 2 3∘(∘.×))⍣¯1⊢1 2 3∘.×4 5 6" #(4 5 6))
-  (for "More complex outer product inversion."
-       "((∘.×)∘4 5 6)⍣¯1⊢((∘.×)∘4 5 6) (1 2 3∘(∘.+)) 10 20 30" #2A((11 21 31) (12 22 32) (13 23 33)))
+  ;; (for "Inversion of commuted outer product." "((∘.×)∘4 5 6)⍣¯1⊢1 2 3∘.×4 5 6" #(1 2 3))
+  ;; (for "Inversion of commuted outer product, other side." "(1 2 3∘(∘.×))⍣¯1⊢1 2 3∘.×4 5 6" #(4 5 6))
+  ;; (for "More complex outer product inversion."
+  ;;      "((∘.×)∘4 5 6)⍣¯1⊢((∘.×)∘4 5 6) (1 2 3∘(∘.+)) 10 20 30" #2A((11 21 31) (12 22 32) (13 23 33)))
   (for "Power set." "{⌿∘⍵¨↓⌽⍉2⊥⍣¯1⊢¯1+⍳2*≢⍵}'ab'" #("" "a" "b" "ab"))
   (for "Longer power set." "{⌿∘⍵¨↓⌽⍉2⊥⍣¯1⊢¯1+⍳2*≢⍵}'abc'"
        #("" "a" "b" "ab" "c" "ac" "bc" "abc"))

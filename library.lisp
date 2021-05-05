@@ -393,8 +393,34 @@
   (lambda (omega &optional alpha)
     (if (not (arrayp omega))
 	omega (aops:permute (if alpha (loop :for i :across (enclose-atom alpha) :collect (- i index-origin))
-				(loop :for i :from (1- (rank omega)) :downto 0 :collect i))
-			    omega))))
+	      			(loop :for i :from (1- (rank omega)) :downto 0 :collect i))
+	      		    omega)
+	;; (let* ((idims (dims omega))
+	;;        (idfactor 1)
+	;;        (idfactors (funcall (if alpha #'identity #'reverse)
+	;; 			   (loop :for d :in (reverse idims) :for dx :from 0
+	;; 			      :collect idfactor :do (setq idfactor (* d idfactor)))))
+	;;        (indices (if alpha
+	;; 		    (reverse (loop :for i :across (enclose-atom alpha) :collect (- i index-origin)))
+	;; 		    ;; (reverse (iota (rank omega)))
+	;; 		    (loop :for i :from (1- (rank omega)) :downto 0 :collect i)))
+	;;        (r-indices (reverse indices))
+	;;        (output (make-array (print (loop :for a :in indices :collect (nth a idims)))
+	;; 			   :element-type (element-type omega))))
+	;;   (print (list :idf idfactors indices idims))
+	;;   (dotimes (i (size omega))
+	;;     ;; (print (loop :for id :across alpha :for if :in idfactors
+	;;     ;; 	      :collect (mod (floor i (nth (- id index-origin) idfactors))
+	;;     ;; 			    (nth (- id index-origin) idims))))
+	;;     (setf (row-major-aref output (loop :for id :in indices :for if :in (if (not alpha)
+	;; 									   idfactors
+	;; 									   (reverse idfactors))
+	;; 				    :do (print (list :i id))
+	;;     				    :summing (* if (mod (floor i (nth id idfactors))
+	;;     							(nth id idims)))))
+	;;     	  (row-major-aref omega i)))
+	;;   output)
+	)))
 
 (defun matrix-inverse (omega)
   "Invert a matrix. Used to implement monadic [⌹ matrix inverse]."
