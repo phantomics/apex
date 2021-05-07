@@ -292,7 +292,7 @@
 					      (+ index-origin (random omega)))
 					  (if (floatp omega)
 					      (random omega)
-					      (error "The right arguments to ? must be non-negative integers.")))))
+					      (error "The right argument to ? can only contain non-negative integers or floats.")))))
 		 (deal index-origin))
      (tests (is "⍴5?⍴⍳5" #(5))))
   (○ (has :titles ("Pi Times" "Circular"))
