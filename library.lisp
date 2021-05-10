@@ -388,40 +388,20 @@
 			      uniques))))
     output))
 
-;; (aops:permute (if alpha (loop :for i :across (enclose-atom alpha) :collect (- i index-origin))
-;; 			(loop :for i :from (1- (rank omega)) :downto 0 :collect i))
-;; 		    omega)
-
 (defun permute-array (index-origin)
   "Wraps (aops:permute) to permute an array, rearranging the axes in a given order or reversing them if no order is given. Used to implement monadic and dyadic [⍉ permute]."
   (lambda (omega &optional alpha)
+    ;; (print (list :om omega alpha))
     (if (not (arrayp omega))
-	omega (let* ((idims (dims omega)) (irank (rank omega))
-		     (odims) (idfactor 1) (odfactor 1)
-		     (id-factors (reverse (loop :for d :in (reverse idims)
-					     :collect idfactor :do (setq idfactor (* d idfactor)))))
-		     (indices (if alpha (progn (setq odims (loop :for i :below irank :collect nil))
-					       (loop :for i :across (enclose-atom alpha) :for ix :from 0
-						  :do (setf (nth (- i index-origin) odims)
-							    (nth ix idims))
-						  :collect (- i index-origin)))
-				  (reverse (iota irank))))
-		     (odims (or odims (reverse idims)))
-		     (od-factors (make-array irank))
-		     (output (make-array odims :element-type (element-type omega))))
-		(loop :for d :in (reverse odims) :for dx :from 0
-		   :do (setf (aref od-factors (- irank 1 dx)) odfactor
-			     odfactor (* d odfactor)))
-		;; (print (list :idf id-factors od-factors indices idims odims))
-		(dotimes (i (size omega))
-		  (let* ((index 0) (remaining i) (oindex 0))
-		    (loop :for ix :in indices :for if :in id-factors
-	  	       :collect (multiple-value-bind (index remainder) (floor remaining if)
-	  			  (setq remaining remainder)
-	  			  (incf oindex (* index (aref od-factors ix)))
-	  			  index))
-		    (setf (row-major-aref output oindex) (row-major-aref omega i))))
-		output))))
+	omega (progn (if alpha (if (not (arrayp alpha))
+				   (setq alpha (- alpha index-origin))
+				   (if (vectorp alpha)
+				       (if (> (length alpha) (rank omega))
+					   (error "Length of left argument to ⍉ must be equal to rank of right argument.")
+					   (loop :for a :across alpha :for ax :from 0
+					      :do (setf (aref alpha ax) (- a index-origin))))
+				       (error "Left argument to ⍉ must be a scalar or vector."))))
+		     (permute-axes omega alpha)))))
 
 (defun matrix-inverse (omega)
   "Invert a matrix. Used to implement monadic [⌹ matrix inverse]."

@@ -1747,6 +1747,77 @@
 			(row-major-aref input i))))
 	      output)))
 
+(defun permute-axes (omega alpha)
+  (let* ((idims (dims omega)) (irank (rank omega))
+	 (odims) (positions) (diagonals) (idims-reduced) (idfactor 1) (odfactor 1)
+	 (id-factors (reverse (loop :for d :in (reverse idims)
+				 :collect idfactor :do (setq idfactor (* d idfactor)))))
+	 (indices (if alpha (progn (setq odims (loop :for i :below irank :collect nil))
+				   (if (vectorp alpha)
+				       (loop :for i :across alpha :for id :in idims :for ix :from 0
+					  :do (if (not (member i positions))
+						  ;; if a duplicate position is found, a diagonal section
+						  ;; is being performed
+						  (setf (nth i odims) (nth ix idims)
+							positions (cons i positions)
+							idims-reduced (cons id idims-reduced)))
+					    ;; collect possible diagonal indices into diagonal list
+					    (if (assoc i diagonals)
+						(setf (rest (assoc i diagonals))
+						      (cons ix (rest (assoc i diagonals))))
+						(setf diagonals (cons (list i ix) diagonals)))
+					  :collect i)
+				       (progn (setf odims idims
+						    positions (cons alpha positions))
+					      (list alpha))))
+		      (reverse (iota irank))))
+	 ;; remove indices not being used for diagonal section from diagonal list
+	 (diagonals (loop :for d :in diagonals :when (< 2 (length d)) :collect (rest d)))
+	 ;; the idims-reduced are a set of the original dimensions without dimensions being elided
+	 ;; for diagonal section, used to get the initial output array used for diagonal section
+	 (odims (or (if (not diagonals) odims (reverse idims-reduced))
+		    (reverse idims)))
+	 (od-factors (make-array irank))
+	 (output (make-array odims :element-type (element-type omega)))
+	 (output-linear (make-array (size output) :element-type (element-type omega)
+				    :displaced-to output :fill-pointer 0)))
+    (loop :for d :in (reverse odims) :for dx :from 0
+       :do (setf (aref od-factors (- irank 1 dx)) odfactor
+		 odfactor (* d odfactor)))
+    ;; (print (list :idf id-factors od-factors indices idims odims positions))
+    (if (or (not alpha) (= irank (length positions)))
+	;; handle regular permutation cases
+	(dotimes (i (size omega))
+	  (let* ((index 0) (remaining i) (oindex 0))
+	    (loop :for ix :in indices :for if :in id-factors
+	       :collect (multiple-value-bind (index remainder) (floor remaining if)
+	  		  (setq remaining remainder)
+	  		  (incf oindex (* index (aref od-factors ix)))
+	  		  index))
+	    (setf (row-major-aref output oindex) (row-major-aref omega i))))
+	(let ((diag-vals (make-array (length diagonals))))
+	  ;; handle diagonal array sections
+	  (dotimes (i (size omega))
+	    (loop :for i :below (length diag-vals) :do (setf (aref diag-vals i) nil))
+	    (let ((valid t) (index 0) (remaining i) (oindex 0))
+	      (loop :for ix :in indices :for if :in id-factors :for ii :from 0
+	  	 :do (multiple-value-bind (index remainder) (floor remaining if)
+		       (destructuring-bind (&optional diag diag-index)
+			   (loop :for d :in diagonals :for dx :from 0 :when (member ii d) :return (list d dx))
+			 (if diag (if (not (aref diag-vals diag-index))
+				      (setf (aref diag-vals diag-index) index)
+				      (if (/= index (aref diag-vals diag-index))
+					  (setq valid nil))))
+	  		 (setq remaining remainder)
+	  		 (incf oindex (* index (aref od-factors ix)))
+	  		 index)))
+	      (if valid (vector-push (row-major-aref omega i) output-linear))))
+	  (if (not (reduce #'> positions))
+	      ;; if array positions for a diagonal section are not in their original order,
+	      ;; permute the initial output according to the new positions
+	      (setq output (permute-axes output (coerce (reverse positions) 'vector))))))
+    output))
+
 (defun invert-matrix (in-matrix)
   "Find the inverse of a square matrix."
   (let ((dim (array-dimension in-matrix 0))   ;; dimension of matrix
