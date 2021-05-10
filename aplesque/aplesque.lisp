@@ -1797,7 +1797,7 @@
 	    (setf (row-major-aref output oindex) (row-major-aref omega i))))
 	(let ((diag-vals (make-array (length diagonals))))
 	  ;; handle diagonal array sections
-	  (xdotimes output (i (size omega))
+	  (dotimes (i (size omega))
 	    (loop :for i :below (length diag-vals) :do (setf (aref diag-vals i) nil))
 	    (let ((valid t) (index 0) (remaining i) (oindex 0))
 	      (loop :for ix :in indices :for if :in id-factors :for ii :from 0
