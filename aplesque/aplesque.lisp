@@ -731,62 +731,37 @@
 			 (ydotimes output (ix this-degree)
 			   (setf (aref output (+ ix (if (= 0 degree) 0 (aref c-degrees (1- degree)))))
 				 value)))))
-		   ;; TODO: iterate over the output rather than input
-		   ;; (dotimes (i (size output))
-		   ;;   (multiple-value-bind (oseg oseg-index) (if (= 1 section-size)
-		   ;; 						(floor i odiv-size)
-		   ;; 						(floor i section-size)
-		   ;; 						;; (list 0 0)
-		   ;; 						)
-		   ;;     (print (list :os oseg oseg-index (mod oseg-index (length degrees))))
-		   ;;     (let* (;; (oseg-index (if (= 1 section-size)
-		   ;; 	      ;;  		      oseg-index (mod oseg-index (length degrees))))
-		   ;; 	      (dx (or (loop :for d :across c-degrees :for di :from 0 ;; dimension index
-		   ;; 			 :when (> d oseg-index)
-		   ;; 			 :return di)
-		   ;; 		      (1- (rank input))))
-		   ;; 	      ;; (dx (floor oseg-index 7))
-		   ;; 	      ;; (dx (floor (mod i odiv-size) section-size))
-		   ;; 	      )
-		   ;; 	 ;; (print (list :dd i oseg oseg-index dx (aref degrees dx)
-		   ;; 	 ;; 	      (+ dx (* oseg idiv-size))
-		   ;; 	 ;; 	      (if positive-indices (loop :for p :across positive-indices
-		   ;; 	 ;; 	      			      :for px :from 0 :when (= p dx)
-		   ;; 	 ;; 	      			      :return p))
-		   ;; 	 ;; 	      (floor i odiv-size)))
-		   ;; 	 (if (< 0 (aref degrees dx))
-		   ;; 	     (setf (row-major-aref output i)
-		   ;; 		   (row-major-aref input (+ (* section-size
-		   ;; 		   			       (if (not positive-indices)
-		   ;; 		   				   dx (loop :for p :across positive-indices
-		   ;; 		   					 :for px :from 0 :when (= p dx)
-		   ;; 		   					 :return px)))
-		   ;; 		   			    (mod i section-size)
-		   ;; 		   			    ;; (if (= 1 section-size)
-		   ;; 		   			    ;;   	0 (* idiv-size (floor i odiv-size)))
-		   ;; 		   			    (* oseg idiv-size)
-		   ;; 		   			    ;; (* section-size
-		   ;; 		   			    ;;    (if (= dx 0) 0 (aref c-degrees (1- dx))))
-		   ;; 		   			    ))
-		   ;; 		   ;; (row-major-aref input (floor i 2))
-		   ;; 		   )))))
-		   (ydotimes output (i (size input))
-		     (let* ((iseg (floor i idiv-size))
-		   	    ;; input segment index
-		   	    (dx (funcall (if compress-mode #'identity (lambda (x) (aref positive-indices x)))
-		   			 ;; degree index; which degree is being expressed
-		   			 (floor (mod i idiv-size) section-size))))
-		       (dotimes (d (aref degrees dx))
-		   	 ;; output index is: the degree iteration × the section size,
-		   	 ;; plus the segment index × the output division length
-		   	 ;; plus the input index modulo the section size,
-		   	 ;; plus the section size × the degree offset
-		   	 (setf (row-major-aref output (+ (* d section-size)
-		   					 (* iseg odiv-size) (mod i section-size)
-		   					 (* section-size
-		   					    (if (= dx 0) 0 (aref c-degrees (1- dx))))))
-		       	       (row-major-aref input i)))))
-		   )
+		   (if (sub-8-bit-integer-elements-p input)
+		       (xdotimes output (i (size output))
+			 (multiple-value-bind (oseg remainder) (floor i odiv-size)
+			   (multiple-value-bind (oseg-index element-index) (floor remainder section-size)
+			     ;; dimension index
+			     (let ((dx (loop :for d :across c-degrees :for di :from 0
+					  :when (> d oseg-index) :return di)))
+			       (if (< 0 (aref degrees dx))
+				   (setf (row-major-aref output i)
+			 		 (row-major-aref
+					  input (+ element-index (* oseg idiv-size)
+						   (* section-size (if (not positive-indices)
+			 	   				       dx (loop :for p :across positive-indices
+			 	   					     :for px :from 0 :when (= p dx)
+			 	   					     :return px)))))))))))
+		       (ydotimes output (i (size input))
+			 (let* ((iseg (floor i idiv-size))
+	       			;; input segment index
+	       			(dx (funcall (if compress-mode #'identity (lambda (x) (aref positive-indices x)))
+	       				     ;; degree index; which degree is being expressed
+	       				     (floor (mod i idiv-size) section-size))))
+			   (dotimes (d (aref degrees dx))
+	       		     ;; output index is: the degree iteration × the section size,
+	       		     ;; plus the segment index × the output division length
+	       		     ;; plus the input index modulo the section size,
+	       		     ;; plus the section size × the degree offset
+	       		     (setf (row-major-aref output (+ (* d section-size)
+	       						     (* iseg odiv-size) (mod i section-size)
+	       						     (* section-size
+	       							(if (= dx 0) 0 (aref c-degrees (1- dx))))))
+	           		   (row-major-aref input i)))))))
 	       output)))))
 
 (defun partitioned-enclose (positions input axis)
