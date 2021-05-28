@@ -151,7 +151,11 @@
 (defun process-operator (this-item properties process idiom space)
   (if (listp this-item)
       (if (and (eq :op (first this-item))
-	       (not (listp (first (last this-item)))))
+	       (not (listp (first (last this-item))))
+	       (or (not (getf properties :glyph))
+		   (not (characterp (first (last this-item))))
+		   (char= (character (getf properties :glyph))
+			  (first (last this-item)))))
 	  ;; process an operator token, allowing specification of the valence,
 	  ;; either :lateral or :pivotal
 	  (destructuring-bind (op-type op-symbol)

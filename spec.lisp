@@ -41,10 +41,9 @@
 
  ;; standard grammar components, with elements to match the basic language forms and
  ;; pattern-matching systems to register combinations of those forms
- (grammar (:opening-patterns *composer-opening-patterns*)
-	  (:following-patterns *composer-following-patterns*
-			       ;; composer-optimized-patterns-common
-			       ))
+ (grammar (:opening-patterns *composer-optimized-opening-patterns-common*
+			     *composer-opening-patterns*)
+	  (:following-patterns *composer-following-patterns*))
 
  ;; parameters for describing and documenting the idiom in different ways; currently, these options give
  ;; the order in which output from the blocks of tests is printed out for the (test) and (demo) options

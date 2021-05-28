@@ -77,7 +77,7 @@ A full guide to the APL language is far beyond the scope of this file, but here 
 
 [This is a detailed language tutorial covering most of the functions and operators in April.](http://microapl.com/APL/tutorial_contents.html)
 
-[The original paper by Ken Iverson, creator of APL, detailing the language's underlying philosophy.](http://www.eecg.toronto.edu/~jzhu/csc326/readings/iverson.pdf)
+[The original paper by Ken Iverson, creator of APL, detailing the language's underlying philosophy.](https://www.jsoftware.com/papers/tot.htm)
 
 If you would like a quick tour of the language, April includes a function that will print demos of all the commands and many APL syntax features. To see the demos, enter:
 

@@ -381,10 +381,10 @@
 	   (pattern-settings
 	    `((idiom-composer-opening-patterns ,idiom-symbol)
 	      (append (idiom-composer-opening-patterns ,idiom-symbol)
-		      ,(second (assoc :opening-patterns (of-subspec grammar))))
+		      ,@(rest (assoc :opening-patterns (of-subspec grammar))))
 	      (idiom-composer-following-patterns ,idiom-symbol)
 	      (append (idiom-composer-following-patterns ,idiom-symbol)
-		      ,(second (assoc :following-patterns (of-subspec grammar))))))
+		      ,@(rest (assoc :following-patterns (of-subspec grammar))))))
 	   (idiom-definition `(make-instance 'idiom :name ,(intern symbol-string "KEYWORD")))
 	   (printout-sym (concatenate 'string symbol-string "-F"))
 	   (inline-sym (concatenate 'string symbol-string "-C"))

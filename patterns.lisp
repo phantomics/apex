@@ -5,35 +5,41 @@
 
 "A set of optimization patterns for April; these patterns are matched before more basic language structures are recognized by the compiler. Optimized code for common APL language idioms is implemented in this way."
 
-;; (set-composer-patterns
-;;  composer-optimized-patterns-common
-;;  ;; optimized code for common APL idioms
-;;  (with :idiom-symbol idiom :space-symbol workspace :process-symbol process
-;;        :properties-symbol properties :precedent-symbol precedent)
-;;  (sum-until-pattern
-;;   ;; optimize the pattern ⊃⌽,Y to get the last row-major element of Y
-;;   ((:with-preceding-type :array)
-;;    (disclose-function :element (function :glyph \,))
-;;    (rotate-function :element (function :glyph ⌽))
-;;    (ravel-function :element (function :glyph ⊃)))
-;;   (let ((input (gensym)))
-;;     `(let ((,input ,precedent))
-;;        (if (not (arrayp ,input))
-;; 	   ,input (row-major-aref ,input (1- (array-total-size ,input))))))
-;;   '(:type (:array :evaluated :via-get-last-pattern)))
-;;  (sum-until-pattern
-;;   ;; optimize the pattern +/⍳Y to sum until Y
-;;   ((:with-preceding-type :array)
-;;    (index-function :element (function :glyph ⍳))
-;;    (reduce-operator :element (operator :glyph /))
-;;    (add-function :element (function :glyph +)))
-;;   (let ((var (gensym)))
-;;     `(loop :for ,var :from 0 :to (disclose ,precedent) :summing ,var))
-;;   '(:type (:array :evaluated :via-sum-until-pattern)))
-;;  (rank-pattern
-;;   ;; optimize the pattern ⍴⍴Y to get the rank of an array
-;;   ((:with-preceding-type :array)
-;;    (shape-functions :element (function :glyph ⍴) :times 2)
-;;    (value :element (array :cancel-if :pivotal-composition) :optional t :times :any))
-;;   (if (not value) `(avector (aops:rank ,precedent)))
-;;   '(:type (:array :evaluated :via-rank-pattern))))
+(composer-pattern sum-until-pattern (iota iota-props slash slash-props plus plus-props)
+    ((assign-element iota iota-props process-function '(:glyph ⍳))
+     (assign-element slash slash-props process-operator '(:glyph /))
+     (assign-element plus plus-props process-function '(:glyph +)))
+  (if (and iota slash plus)
+      (let ((arg (gensym)) (var (gensym)))
+	(values `(lambda (,arg) (loop :for ,var :from 0 :to (disclose ,arg) :summing ,var))
+		'(:type (:function :implicit :sum-until-pattern))))
+      (values nil nil tokens)))
+
+(composer-pattern get-last-pattern (comma comma-props rotate rotate-props disclose disclose-props)
+    ((assign-element comma comma-props process-function '(:glyph \,))
+     (assign-element rotate rotate-props process-function '(:glyph ⌽))
+     (if (not rotate) (assign-element rotate rotate-props process-function '(:glyph ⊖)))
+     (assign-element disclose disclose-props process-function '(:glyph ⊃)))
+  (if (and comma rotate disclose)
+      (let ((input (gensym)))
+	(values `(lambda (,input)
+		   (if (not (arrayp ,input))
+   		       ,input (row-major-aref ,input (1- (array-total-size ,input)))))
+		'(:type (:function :implicit :get-last-pattern))))
+      (values nil nil tokens)))
+
+(composer-pattern rank-pattern (shape1 shape1-props shape2 shape2-props)
+    ((assign-element shape1 shape1-props process-function '(:glyph ⍴))
+     (assign-element shape2 shape2-props process-function '(:glyph ⍴)))
+  (if (and shape1 shape2)
+      (let ((input (gensym)))
+	(values `(lambda (,input) (vector (rank ,input)))
+		'(:type (:function :implicit :rank-pattern))))
+      (values nil nil tokens)))
+
+(defvar *composer-optimized-opening-patterns-common*)
+
+(setq *composer-optimized-opening-patterns-common*
+      '((:name :sum-until-pattern :function sum-until-pattern)
+	(:name :get-last-pattern :function get-last-pattern)
+	(:name :rank-pattern :function rank-pattern)))

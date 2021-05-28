@@ -10,21 +10,15 @@
     (loop :for w :across workers :when (not (lparallel.kernel::running-category w))
        :counting w :into total :finally (return total))))
 
-(defmacro xdotimes (object clause &body body)
-  (let ((asym (gensym)) (eltype (gensym)) (free-threads (gensym)))
-    `(let* ((,asym ,object)
-	    (,eltype (element-type ,asym))
-	    (,free-threads (get-free-threads)))
-       (if (or (not lparallel:*kernel*)
-	       (= 0 ,free-threads)
-	       (eql 'bit ,eltype)
-	       (and (listp ,eltype)
-	   	    (member 'unsigned-byte ,eltype)
-	   	    (> 7 (second ,eltype))))
-	   (dotimes ,clause ,@body)
-	   (pdotimes ,(append clause (list nil free-threads)) ,@body)))))
+(defun sub-8-bit-integer-elements-p (array)
+  (and (arrayp array)
+       (let ((type (element-type array)))
+	 (or (eql 'bit type)
+	     (and (listp type)
+		  (eql 'unsigned-byte (first type))
+		  (> 7 (second type)))))))
 
-(defmacro ydotimes (object clause &body body)
+(defmacro xdotimes (object clause &body body)
   (let ((asym (gensym)) (eltype (gensym)) (free-threads (gensym))
 	(iterations (gensym)) (dividend (gensym)) (remainder (gensym))
 	(x (gensym)) (y (gensym)))
@@ -34,21 +28,27 @@
        (if (or (not lparallel:*kernel*)
 	       (= 0 ,free-threads))
 	   (dotimes ,clause ,@body)
-	   (if (or (eql 'bit ,eltype)
-		   (and (listp ,eltype)
-	   		(member 'unsigned-byte ,eltype)
-	   		(> 7 (second ,eltype))))
+	   (if (sub-8-bit-integer-elements-p ,asym)
 	       (let ((,iterations (if (eq 'bit ,eltype)
-				      8 (/ 8 (second ,eltype)))))
-		 ;; (print (list :iter ,iterations))
+				      64 (/ 64 (second ,eltype)))))
 		 (multiple-value-bind (,dividend ,remainder) (ceiling ,(second clause) ,iterations)
-		   ;; (print (list :dd ,dividend ,remainder))
-		   (pdotimes ,(list x dividend nil free-threads)
+		   (pdotimes ,(list x dividend)
 		     (dotimes (,y (+ ,iterations (if (< ,x (1- ,dividend))
-						     0 ,remainder)))
+		   				     0 ,remainder)))
 		       (let ((,(first clause) (+ ,y (* ,x ,iterations))))
-			 ,@body)))))
+		   	 ,@body)))))
 	       (pdotimes ,(append clause (list nil free-threads)) ,@body))))))
+
+(defmacro ydotimes (object clause &body body)
+  (let ((asym (gensym)) (eltype (gensym)) (free-threads (gensym)))
+    `(let* ((,asym ,object)
+	    (,eltype (element-type ,asym))
+	    (,free-threads (get-free-threads)))
+       (if (or (not lparallel:*kernel*)
+	       (= 0 ,free-threads)
+	       (sub-8-bit-integer-elements-p ,asym))
+	   (dotimes ,clause ,@body)
+	   (pdotimes ,(append clause (list nil free-threads)) ,@body)))))
 
 (defun duplicate (object)
   (if (not (arrayp object))
@@ -503,7 +503,7 @@
 		      :element-type (if (and (< 0 (size input)) (arrayp (row-major-aref input 0)))
 					(element-type (aref (row-major-aref input 0)))
 					(assign-element-type (row-major-aref input 0))))
-	  (let* ((isize (size input)) (irank (rank input))
+	  (let* ((isize (size input)) (irank (rank input)) (itype (element-type input))
 		 (rdiff (- irank (length dimensions)))
 		 (idims (make-array irank :element-type (if (= 0 isize) t (list 'integer 0 isize))
 				    :initial-contents (dims input))))
@@ -548,9 +548,12 @@
 							   (copy-nested-array fill-element)))))
 
 		  (if (< 0 isize)
-		      (if (< isize osize)
+		      (if (and (< isize osize)
+			       (not (sub-8-bit-integer-elements-p input)))
 			  ;; choose shorter path depending on whether input or output are larger
-			  (xdotimes output (i isize)
+			  ;; always iterate over output in the case of sub-8-bit arrays as this is necessary
+			  ;; to respect the segmentation of the elements
+			  (ydotimes output (i isize)
 		      	    (let ((oindex 0) (remaining i) (valid t))
 		      	      ;; calculate row-major offset for outer array dimensions
 		      	      (loop :for i :from 0 :to (- irank 1) :while valid
@@ -718,30 +721,72 @@
 	       ;; in compress-mode: degrees must = length of axis,
 	       ;; zeroes are omitted from output, negatives add zeroes
 	       ;; otherwise: zeroes pass through, negatives add zeroes, degrees>0 must = length of axis
+	       ;; (print (list :c c-degrees section-size odiv-size idiv-size positive-indices))
 	       (if (is-unitary input)
 		   ;; if the input is a unitary value, just expand or replicate with that value
 		   (let ((value (if (not (arrayp input)) input (row-major-aref input 0))))
+		     ;; TODO: create a variant the iterates over the output
 		     (dotimes (degree (length degrees))
 		       (let ((this-degree (aref degrees degree)))
-			 (xdotimes output (ix this-degree)
+			 (ydotimes output (ix this-degree)
 			   (setf (aref output (+ ix (if (= 0 degree) 0 (aref c-degrees (1- degree)))))
 				 value)))))
-		   (xdotimes output (i (size input))
+		   ;; TODO: iterate over the output rather than input
+		   ;; (dotimes (i (size output))
+		   ;;   (multiple-value-bind (oseg oseg-index) (if (= 1 section-size)
+		   ;; 						(floor i odiv-size)
+		   ;; 						(floor i section-size)
+		   ;; 						;; (list 0 0)
+		   ;; 						)
+		   ;;     (print (list :os oseg oseg-index (mod oseg-index (length degrees))))
+		   ;;     (let* (;; (oseg-index (if (= 1 section-size)
+		   ;; 	      ;;  		      oseg-index (mod oseg-index (length degrees))))
+		   ;; 	      (dx (or (loop :for d :across c-degrees :for di :from 0 ;; dimension index
+		   ;; 			 :when (> d oseg-index)
+		   ;; 			 :return di)
+		   ;; 		      (1- (rank input))))
+		   ;; 	      ;; (dx (floor oseg-index 7))
+		   ;; 	      ;; (dx (floor (mod i odiv-size) section-size))
+		   ;; 	      )
+		   ;; 	 ;; (print (list :dd i oseg oseg-index dx (aref degrees dx)
+		   ;; 	 ;; 	      (+ dx (* oseg idiv-size))
+		   ;; 	 ;; 	      (if positive-indices (loop :for p :across positive-indices
+		   ;; 	 ;; 	      			      :for px :from 0 :when (= p dx)
+		   ;; 	 ;; 	      			      :return p))
+		   ;; 	 ;; 	      (floor i odiv-size)))
+		   ;; 	 (if (< 0 (aref degrees dx))
+		   ;; 	     (setf (row-major-aref output i)
+		   ;; 		   (row-major-aref input (+ (* section-size
+		   ;; 		   			       (if (not positive-indices)
+		   ;; 		   				   dx (loop :for p :across positive-indices
+		   ;; 		   					 :for px :from 0 :when (= p dx)
+		   ;; 		   					 :return px)))
+		   ;; 		   			    (mod i section-size)
+		   ;; 		   			    ;; (if (= 1 section-size)
+		   ;; 		   			    ;;   	0 (* idiv-size (floor i odiv-size)))
+		   ;; 		   			    (* oseg idiv-size)
+		   ;; 		   			    ;; (* section-size
+		   ;; 		   			    ;;    (if (= dx 0) 0 (aref c-degrees (1- dx))))
+		   ;; 		   			    ))
+		   ;; 		   ;; (row-major-aref input (floor i 2))
+		   ;; 		   )))))
+		   (ydotimes output (i (size input))
 		     (let* ((iseg (floor i idiv-size))
-			    ;; input segment index
-			    (dx (funcall (if compress-mode #'identity (lambda (x) (aref positive-indices x)))
-					 ;; degree index; which degree is being expressed
-					 (floor (mod i idiv-size) section-size))))
+		   	    ;; input segment index
+		   	    (dx (funcall (if compress-mode #'identity (lambda (x) (aref positive-indices x)))
+		   			 ;; degree index; which degree is being expressed
+		   			 (floor (mod i idiv-size) section-size))))
 		       (dotimes (d (aref degrees dx))
-			 ;; output index is: the degree iteration × the section size,
-			 ;; plus the segment index × the output division length
-			 ;; plus the input index modulo the section size,
-			 ;; plus the section size × the degree offset
-			 (setf (row-major-aref output (+ (* d section-size)
-							 (* iseg odiv-size) (mod i section-size)
+		   	 ;; output index is: the degree iteration × the section size,
+		   	 ;; plus the segment index × the output division length
+		   	 ;; plus the input index modulo the section size,
+		   	 ;; plus the section size × the degree offset
+		   	 (setf (row-major-aref output (+ (* d section-size)
+		   					 (* iseg odiv-size) (mod i section-size)
 		   					 (* section-size
-							    (if (= dx 0) 0 (aref c-degrees (1- dx))))))
-		       	       (row-major-aref input i))))))
+		   					    (if (= dx 0) 0 (aref c-degrees (1- dx))))))
+		       	       (row-major-aref input i)))))
+		   )
 	       output)))))
 
 (defun partitioned-enclose (positions input axis)
@@ -831,10 +876,9 @@
 	       (icoords (loop :for i :below (rank input) :collect 0))
 	       (section-size (reduce #'* (loop :for d :in (dims input) :for dx :from 0
 		   	 		    :when (> dx axis) :collect d)))
-
 	       (ofactors (get-dimensional-factors out-dims))
 	       (ifactors (get-dimensional-factors (dims input))))
-	  (dotimes (i (size output))
+	  (xdotimes output (i (size output))
 	    (let* ((focus (mod (floor i section-size) partitions))
 	  	   (this-index (nth focus indices))
 	  	   (this-interval (nth focus intervals))
@@ -871,9 +915,8 @@
       (let ((output (make-array output-dims :element-type (assign-element-type input)
 				:initial-element (disclose (copy-nested-array input)))))
 	(if (arrayp input)
-	    (xdotimes output (i (1- (size output)))
-	      (setf (row-major-aref output (1+ i))
-		    (disclose (copy-nested-array input)))))
+	    (xdotimes output (i (size output))
+	      (setf (row-major-aref output i) (disclose (copy-nested-array input)))))
 	output)
       (if (= 0 (length output-dims))
           (row-major-aref input 0)
@@ -934,11 +977,11 @@
             (z1 (+ 5.5 c))
             (z2 (+ 0.5 c))
             ;; Lanczos approximation coefficients
-            (p0 1.000000000190015)
-            (p1 76.18009172947146 )
-            (p2 -86.50532032941677)
-            (p3 24.01409824083091)
-            (p4 -1.231739572450155)
+            (p0 1.000000000190015d0)
+            (p1 76.18009172947146d0)
+            (p2 -86.50532032941677d0)
+            (p3 24.01409824083091d0)
+            (p4 -1.231739572450155d0)
             (p5 1.208650973866179E-3)
             (p6 -5.395239384953E-6))
         (* (/ (sqrt (* 2.0 pi)) z)
@@ -1061,10 +1104,10 @@
 	 (oscalar (if (= 0 (rank omega)) (disclose omega)))
 	 (osize (size omega)) (adims (dims alpha)) (odims (dims omega))
 	 (output (make-array (append adims odims))))
-    (xdotimes output (x (size output))
-      (setf (row-major-aref output x)
-      	    (funcall function (or oscalar (disclose (row-major-aref omega (mod x osize))))
-      		     (or ascalar (disclose (row-major-aref alpha (floor x osize)))))))
+    (xdotimes output (i (size output))
+      (setf (row-major-aref output i)
+      	    (funcall function (or oscalar (disclose (row-major-aref omega (mod i osize))))
+      		     (or ascalar (disclose (row-major-aref alpha (floor i osize)))))))
     (funcall (if (= 0 (rank output)) #'disclose #'identity)
 	     output)))
 
@@ -1074,9 +1117,9 @@
 	 (interval (reduce #'* (dims original)))
 	 (output (make-array (if left-original (last (dims input) (- (rank input) (rank original)))
 				 (butlast (dims input) (rank original))))))
-    (xdotimes output (x (size output))
-      (let ((input-index (* x (if left-original 1 interval))))
-	(setf (row-major-aref output x)
+    (xdotimes output (i (size output))
+      (let ((input-index (* i (if left-original 1 interval))))
+	(setf (row-major-aref output i)
 	      (nest (funcall function (disclose (row-major-aref input input-index))
 			     (disclose (row-major-aref original 0)))))))
     (funcall (if (= 0 (rank output)) #'disclose #'identity)
@@ -1095,7 +1138,7 @@
 							:displaced-to set
 							:displaced-index-offset (* i last-dim)))))))
 	 (to-search (if (or (vectorp original-set) (not (arrayp original-set)))
-			(if (vectorp to-search)
+			(if (arrayp to-search)
 			    to-search (vector (disclose to-search)))
 			(if (= (first (last (dims set)))
 			       (first (last (dims to-search))))
@@ -1157,12 +1200,12 @@
 			(graded-array (make-array input-length
 						  :element-type (list 'integer 0 input-length))))
 		   (xdotimes graded-array (i input-length) (setf (aref graded-array i) (+ i count-from)))
-		   (xdotimes vector (vix (length vector))
-		     (setf (aref vector vix) (if (and (arrayp (aref input vix))
-						      (< 1 (rank (aref input vix))))
-						 (grade (aref input vix)
+		   (xdotimes vector (i (length vector))
+		     (setf (aref vector i) (if (and (arrayp (aref input i))
+						      (< 1 (rank (aref input i))))
+						 (grade (aref input i)
 							count-from compare-by)
-						 (aref input vix))))
+						 (aref input i))))
 		   (stable-sort graded-array (lambda (1st 2nd)
 					       (let ((val1 (aref vector (- 1st count-from)))
 						     (val2 (aref vector (- 2nd count-from))))
@@ -1510,8 +1553,9 @@
 		(let ((to-rotate (make-array (- orank axis) :displaced-to ofactors
 					     :element-type 'fixnum :displaced-index-offset axis)))
 		  (rotate to-rotate (- irank axis)))))
-	
-	(xdotimes output (i total-size)
+
+	;; TODO: write case for sub-8-bit output where every element of the output is iterated over
+	(ydotimes output (i total-size)
 	  (if (= 0 max-rank)
 	      (setf (row-major-aref output i) (disclose (row-major-aref input i)))
 	      (let ((offset 0) (input-index 0) (out-index 0) (this-rank)
@@ -1552,6 +1596,7 @@
 				   (if (= r (- this-rank 2))
 				       (incf out-index (* remainder (aref ofactors (+ 1 i input-rank-delta))))
 				       (setf remaining remainder)))))
+		      ;; (print (list :oo i out-index this-index))
 		      (setf (row-major-aref output out-index)
 			    (row-major-aref input-element this-index)))))))
 	output)))
@@ -1579,16 +1624,26 @@
 	(xdotimes output (o (size output))
 	  (setf (row-major-aref output o) (make-array axis-dim :element-type (element-type input))))
 	
-	(xdotimes input (i (size input))
-	  (let ((oindex 0) (iindex) (remaining i) (odix 0))
-	    ;; calculate row-major offset for outer array dimensions
-	    (loop :for r :from 0 :to (- irank 1) :for ifactor :across input-factors :for ix :from 0
-	       :do (multiple-value-bind (index remainder) (floor remaining ifactor)
-		     (if (= axis ix) (setq iindex index)
-			 (incf oindex (* index (row-major-aref output-factors (1- (incf odix))))))
-		     (setq remaining remainder)))
-	    (setf (row-major-aref (row-major-aref output oindex) iindex)
-		  (row-major-aref input i))))
+	(xdotimes output (o (size output))
+	  ;; TODO: write case for parallelizing inner process in case lines are long and the
+	  ;; containing output array is small
+	  (symbol-macrolet ((output-element (row-major-aref output o)))
+	    (dotimes (i (size (row-major-aref output o)))
+	      (let ((iindex 0) (remaining o) (odix 0))
+		;; (print (list :ee i))
+		(loop :for ofactor :across output-factors :for ix :from 0
+		   :do (multiple-value-bind (index remainder) (floor remaining ofactor)
+			 ;; (if (= axis ix) (setq iindex index)
+			 ;; 	   (incf oindex (* index (row-major-aref output-factors (1- (incf odix))))))
+			 (if (= ix axis)
+			     (incf iindex (* i (aref input-factors axis))))
+			 (incf iindex (* index (aref input-factors (+ ix (if (< ix axis) 0 1)))))
+			 (setq remaining remainder)
+			 ;; (print (list :in index remainder))
+			 ))
+		(if (= axis (rank output)) (incf iindex i))
+		(setf (row-major-aref output-element i)
+		      (row-major-aref input iindex))))))
 	output)))
 
 (defun ravel (count-from input &optional axes)
@@ -1699,7 +1754,7 @@
 		 ;; to their coordinates that was done to the original array's dimensions and apply the two sets
 		 ;; of coordinates to set each value in the nested output arrays to the corresponding values in
 		 ;; the original array
-		 (xdotimes (row-major-aref output 0) (i (size input))
+		 (ydotimes (row-major-aref output 0) (i (size input))
 		   (let* ((rest i) (inner-index 0) (inner-dx 0) (outer-index 0) (outer-dx 0))
 		     (loop :for f :in infactors :for fx :from 0
 			:do (multiple-value-bind (factor remaining) (floor rest f)
@@ -1730,10 +1785,10 @@
 		   (vset-size (* increment (nth axis idims)))
 		   (output (make-array idims :element-type (element-type input)))
 		   (adjuster (if degrees #'identity (lambda (x) (abs (- x (1- rlen)))))))
-	      (dotimes (i (size input))
+	      (xdotimes input (i (size input))
 		(declare (optimize (safety 1)))
 		(let ((vindex (funcall adjuster
-				       (mod (- (floor i increment)
+				       (mod (+ (floor i increment)
 					       (if (integerp degrees)
 					       	   degrees (if (arrayp degrees)
 					       		       (row-major-aref
@@ -1742,9 +1797,9 @@
 					       			   (* increment (floor i vset-size))))
 					       		       0)))
 					    rlen))))
- 		  (setf (row-major-aref output (+ (mod i increment) (* increment vindex)
-					          (* vset-size (floor i vset-size))))
-			(row-major-aref input i))))
+		  (setf (row-major-aref output i)
+		  	(row-major-aref input (+ (mod i increment) (* increment vindex)
+		  			         (* vset-size (floor i vset-size)))))))
 	      output)))
 
 (defun permute-axes (omega alpha)
@@ -1778,23 +1833,27 @@
 	 (odims (or (if (not diagonals) odims (reverse idims-reduced))
 		    (reverse idims)))
 	 (od-factors (make-array irank))
+	 (s-factors (make-array irank))
 	 (output (make-array odims :element-type (element-type omega)))
 	 (output-linear (make-array (size output) :element-type (element-type omega)
 				    :displaced-to output :fill-pointer 0)))
     (loop :for d :in (reverse odims) :for dx :from 0
        :do (setf (aref od-factors (- irank 1 dx)) odfactor
 		 odfactor (* d odfactor)))
-    ;; (print (list :idf id-factors od-factors indices idims odims positions))
+    (setq odfactor 1)
+    (loop :for ix :from 0 :for i :in id-factors
+       :do (setf (aref s-factors (nth ix indices)) i))
+    ;; (print (list :idf indices id-factors od-factors m-factors s-factors idims odims positions))
     (if (or (not alpha) (= irank (length positions)))
 	;; handle regular permutation cases
-	(xdotimes output (i (size omega))
+	(xdotimes output (i (size output))
 	  (let* ((index 0) (remaining i) (oindex 0))
-	    (loop :for ix :in indices :for if :in id-factors
-	       :collect (multiple-value-bind (index remainder) (floor remaining if)
-	  		  (setq remaining remainder)
-	  		  (incf oindex (* index (aref od-factors ix)))
-	  		  index))
-	    (setf (row-major-aref output oindex) (row-major-aref omega i))))
+	    (loop :for ix :in indices :for od :across od-factors :for s :across s-factors
+	       :collect (multiple-value-bind (index remainder) (floor remaining od)
+			  (incf oindex (* index s))
+			  (setq remaining remainder)))
+	    (multiple-value-bind (index remainder) (floor oindex (size omega))
+	      (setf (row-major-aref output i) (row-major-aref omega oindex)))))
 	(let ((diag-vals (make-array (length diagonals))))
 	  ;; handle diagonal array sections
 	  (dotimes (i (size omega))
