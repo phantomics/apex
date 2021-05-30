@@ -2,7 +2,7 @@
 
 path ← {                                ⍝ Shortest path from/to ⍵ in graph ⍺.
   graph←⍺                               ⍝ graph and entry/exit vertex vectors
-  fm to←⍵
+  (fm to)←⍵
   fm {                                  ⍝ fm is the starting-from vertex
     $[⍺≡⍬;⍬;                            ⍝ no vertices left: no path
       $[∨/to∊⍺;                         ⍝ found target: path from tree:

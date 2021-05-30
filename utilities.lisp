@@ -61,6 +61,13 @@
 			     (funcall (formatter "𝕊~W") s (second list)) 
 			     (pprint-fill s list))))
 
+(defun load-demos ()
+  (asdf:load-system 'april-demo.cnn)
+  (asdf:load-system 'april-demo.dfns.graph))
+
+(defun run-demo-tests ()
+  (april-demo.dfns.graph::run-tests))
+
 (defun disclose-atom (item)
   "If the argument is a non-nested array with only one member, disclose it, otherwise do nothing."
   (if (not (and (not (stringp item)) (arrayp item) (is-unitary item)
@@ -889,11 +896,11 @@ It remains here as a standard against which to compare methods for composing APL
 	       ;; recursively descend into lists, but not functions contained within a function,
 	       ;; otherwise something like {÷{⍺⍺ ⍵}5} will be read as an operator because an inline
 	       ;; operator is within it
-	       (glean-symbols-from-tokens token space token-list t
-					  (and (listp previous-token)
-					       (characterp (second previous-token))
-					       (char= #\← (second previous-token))
-					       (loop :for tk :in token :always (symbolp tk))))
+	       (get-assigned-symbols token space token-list t
+				     (and (listp previous-token)
+					  (characterp (second previous-token))
+					  (char= #\← (second previous-token))
+					  (loop :for tk :in token :always (symbolp tk))))
 	       (if (and (not (keywordp token))
 			(symbolp token))
 		   (cond ((and (not (member token *idiom-native-symbols*))
