@@ -1406,6 +1406,7 @@
 		     (make-array (if set idims odims)
 				 :element-type (if set-by t (or set-type (element-type input))))))
 	 ;; the default set-by function just returns the second argument
+	 (set-by-function set-by)
 	 (set-by (or set-by (if set (lambda (a b) (declare (ignore a)) b)))))
     ;; if multiple axes have been passed, populate the vector of row-major indices
     (if naxes (axes-to-indices indices idims rmindices))
@@ -1436,12 +1437,17 @@
 							    set)))
 					 (if pindices (setf (aref pindices (rmi-from-subscript-vector input i))
 							    1)))))))
-	      (xdotimes output (i (size input))
-		;; if there are no indices the set-by function is to
-		;; be run on all elements of the array
-		(setf (row-major-aref output i)
-		      (apply set-by (row-major-aref input i)
-			     (and set (list set))))))
+	      (if set-by-function ;; TODO: enable multithreading or not based on set-by function type
+		  (dotimes (i (size input))
+		    (setf (row-major-aref output i)
+			  (apply set-by (row-major-aref input i)
+				 (and set (list set)))))
+		  (xdotimes output (i (size input))
+		    ;; if there are no indices the set-by function is to
+		    ;; be run on all elements of the array
+		    (setf (row-major-aref output i)
+			  (apply set-by (row-major-aref input i)
+				 (and set (list set)))))))
 	  (if pindices (progn (xdotimes output (i (size input))
 				(if (= 0 (aref pindices i))
 				    (setf (row-major-aref output i)
@@ -1815,7 +1821,6 @@
     (loop :for d :in (reverse odims) :for dx :from 0
        :do (setf (aref od-factors (- irank 1 dx)) odfactor
 		 odfactor (* d odfactor)))
-    (setq odfactor 1)
     (loop :for ix :from 0 :for i :in id-factors
        :do (setf (aref s-factors (nth ix indices)) i))
     ;; (print (list :idf indices id-factors od-factors m-factors s-factors idims odims positions))
@@ -1846,7 +1851,7 @@
 	  		 (incf oindex (* index (aref od-factors ix)))
 	  		 index)))
 	      (if valid (vector-push (row-major-aref omega i) output-linear))))
-	  (if (not (reduce #'> positions))
+	  (if (not (apply #'> positions))
 	      ;; if array positions for a diagonal section are not in their original order,
 	      ;; permute the initial output according to the new positions
 	      (setq output (permute-axes output (coerce (reverse positions) 'vector))))))
@@ -2012,7 +2017,7 @@
 		 (if (= 0 dx) 1 (* last-dim (aref out-factors (- wrank dx))))
 		 last-dim d))
 
-    (xdotimes output (o (size output))
+    (dotimes (o (size output)) ;; xdo
       (let* ((acoords (make-array irank :element-type 'fixnum))
 	     (oindices (let ((remaining o))
 			 (loop :for of :across out-factors
@@ -2116,6 +2121,8 @@
 					 :initial-element 0 :element-type 'fixnum))
 		  (col-widths (make-array (first (last idims))
 					  :initial-element 1 :element-type 'fixnum))
+		  (col-array-widths (make-array (first (last idims))
+						:initial-element 1 :element-type 'fixnum))
 		  (col-types (make-array (first (last idims)) :initial-element nil))
 		  (col-segments (make-array (first (last idims)) :initial-element nil))
 		  (strings (make-array idims))
@@ -2124,6 +2131,7 @@
 	     (declare (dynamic-extent output-default-char row empty-rows))
 	     (symbol-macrolet ((this-string (apply #'aref strings coords))
 			       (this-col-width (aref col-widths last-coord))
+			       (this-col-array-width (aref col-array-widths last-coord))
 			       (this-col-type (aref col-types last-coord))
 			       (last-col-type (aref col-types (1- last-coord)))
 			       (segments (aref col-segments last-coord)))
@@ -2146,8 +2154,12 @@
 					  ;; array and adjusting the offsets to allow for its height and width
 					  (let ((rendered (array-impress elem :format format :segment segment
 									 :prepend t)))
-					    ;; in the case a 1D array (string) is passed back, height defaults to 1
+					    ;; if a 1D array (string) is passed back, height defaults to 1
 					    (setf this-string rendered)
+					    
+					    (setf this-col-array-width
+						  (max this-col-array-width (or (second (dims rendered))
+										(first (dims rendered)))))
 					    ;; TODO: improve element type-checking here
 					    (if (eq 'character (element-type elem))
 						(add-column-types :array :character-array)
@@ -2261,12 +2273,17 @@
 					 ;; add a prepending space if this is an array column
 					 ;; or if the prior column held arrays, this column doesn't
 					 ;; and this column is not a character-only column
-					 (if (or (and (member :array (aref col-types s))
-						      (not (and (/= 0 s)
-								(eq :character (first (aref col-types (1- s))))
-								(not (rest  (aref col-types (1- s)))))))
-						 (and (/= 0 s) (not char-column)
-						      (member :array (aref col-types (1- s)))))
+					 (if (and (or (/= 0 s)
+						      (<= (aref col-widths s) (aref col-array-widths s)))
+						  ;; don't add the prepending space if this is the
+						  ;; first column and the widest number in the column is wider
+						  ;; than the widest sub-array
+						  (or (and (member :array (aref col-types s))
+							   (not (and (/= 0 s)
+								     (eq :character (first (aref col-types (1- s))))
+								     (not (rest  (aref col-types (1- s)))))))
+						      (and (/= 0 s) (not char-column)
+							   (member :array (aref col-types (1- s))))))
 					     1 0))
 				(aref x-offsets s) total
 				;; set the x-offset at the current index to the calculated total up to this point,

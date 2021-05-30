@@ -681,7 +681,7 @@
 		     (rlen (nth axis odims))
 		     (increment (reduce #'* (nthcdr (1+ axis) odims)))
 		     (output (make-array odims)))
-		(xdotimes output (i (size output))
+		(dotimes (i (size output)) ;; xdo
 		  (declare (optimize (safety 1)))
 		  (let ((value)	(vector-index (mod (floor i increment) rlen)))
 		    (if inverse
@@ -728,13 +728,13 @@
 	      (if alpha (if (and oscalar ascalar)
 			    (setq output (funcall function-dyadic (disclose-unitary omega)
 						  (disclose-unitary alpha)))
-			    (dotimes (i (size (if oscalar alpha omega)))
+			    (dotimes (i (size (if oscalar alpha omega))) ;; xdo
 			      (setf (row-major-aref output i)
 				    (funcall function-dyadic
 					     (disclose-unitary (or oscalar (row-major-aref omega i)))
 					     (disclose-unitary (or ascalar (row-major-aref alpha i)))))))
 		  (if oscalar (setq output (funcall function-monadic oscalar))
-		      (dotimes (i (size omega))
+		      (dotimes (i (size omega)) ;; xdo
 			(setf (row-major-aref output i)
 			      (funcall function-monadic (row-major-aref omega i))))))
 	      (if (and oscalar ascalar (< 0 max-rank))
@@ -828,7 +828,7 @@
       	(if odivs (generate-divs odivs omega odiv-dims odiv-size))
       	(if alpha (progn (if adivs (generate-divs adivs alpha adiv-dims adiv-size))
 			 (let ((output (make-array (dims (or odivs adivs)))))
-			   (xdotimes output (i (size output))
+			   (dotimes (i (size output)) ;; xdo
 			     (let ((this-odiv (if (not odivs)
 						  omega (if (= 0 (rank odivs))
 							    (aref odivs) (row-major-aref odivs i))))
@@ -841,11 +841,12 @@
 			   (mix-arrays (max (rank odivs) (rank adivs))
 			    	       output)))
 	    (let ((output (make-array (dims odivs))))
-	      (xdotimes output (i (size output))
+	      (dotimes (i (size output)) ;; xdo
 		(setf (row-major-aref output i) (funcall function-monadic (row-major-aref odivs i))))
 	      (mix-arrays (rank output) output)))))))
 
 (defun operate-atop (right-fn-monadic right-fn-dyadic left-fn-monadic)
+  "Generate a function applying two functions to a value in succession. Used to implement [⍤ atop]."
   (lambda (omega &optional alpha)
     (if alpha (funcall left-fn-monadic (funcall right-fn-dyadic omega alpha))
 	(funcall left-fn-monadic (funcall right-fn-monadic omega)))))
@@ -884,7 +885,7 @@
 	    (let* ((to-process (split omega 1))
 		   (output-length (size to-process)))
 	      (if (vectorp right)
-		  (ydotimes to-process (i (length right))
+		  (dotimes (i (length right)) ;; ydo
 		    (setf (aref to-process (- (aref right i) index-origin))
 			  (if alpha (funcall left-fn-d (aref to-process (- (aref right i) index-origin)
 							     alpha))
@@ -900,7 +901,7 @@
 	    (let ((true-indices (make-array (size omega) :element-type '(unsigned-byte 8) :initial-element 0))
 		  (omega-copy (copy-array omega :element-type t))
 		  (sv-length 0))
-	      (xdotimes true-indices (i (size omega))
+	      (dotimes (i (size omega)) ;; xdo
 		(if (or (and right-fn (/= 0 (funcall right-fn (row-major-aref omega i))))
 			(and (arrayp right)
 			     (not (loop :for r :below (size right) :never (= (row-major-aref right r)
@@ -917,7 +918,7 @@
 			     (incf tvix))))
 		(let ((to-assign (if alpha (funcall left-fn-d true-vector alpha)
 				     (funcall left-fn-m true-vector))))
-		  (xdotimes omega-copy (i (size omega))
+		  (dotimes (i (size omega)) ;; xdo 
 	      	    (if (/= 0 (row-major-aref true-indices i))
 	      		(setf (row-major-aref omega-copy i)
 	      		      (row-major-aref to-assign (1- (row-major-aref true-indices i))))))

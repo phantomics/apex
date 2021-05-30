@@ -683,7 +683,7 @@
 			   (make-array (1- (length content)) :element-type 'character
 				       :displaced-to content))))))
 	     (=vex-closure (boundary-chars &optional transform-by
-					   &key (disallow-linebreaks) (symbol-collector))
+					   &key (disallow-linebreaks) (symbol-collector) (if-confirmed))
 	       (let* ((balance 1)
 		      (char-index 0)
 		      ;; disallow linebreak overriding opening and closing characters
@@ -734,7 +734,9 @@
 						parsed))))
 			    (%any (?eq (aref boundary-chars 1))))
 		   (if (= 0 balance)
-		       enclosed (error "No closing ~a found for opening ~a."
+		       (progn (if if-confirmed (funcall if-confirmed))
+			      enclosed)
+		       (error "No closing ~a found for opening ~a."
 				       (aref boundary-chars 1) (aref boundary-chars 0))))))
 	     (=vex-errant-closing-character (boundary-chars)
 	       (let ((errant-char) (matching-char)
@@ -764,6 +766,7 @@
 			(each-axis-code (loop :for axis :in each-axis :collect
 					     (let ((output (process-lines axis)))
 					       (funcall symbol-collector (second output))
+					       ;;(print (list :out output))
 					       (first output)))))
 		   (cons :axes each-axis-code))))
 	     (handle-function (input-string)
@@ -773,12 +776,10 @@
 			(is-operator-pivotal (member "⍵⍵" is-operator :test #'string=)))
 	     	   (if (and is-operator (not (getf meta :valence)))
 	     	       (setf (getf meta :valence) (if is-operator-pivotal :pivotal :lateral)))
-		   ;; (print (list :mt meta))
 	     	   (list (if is-operator :op :fn)
 	     		 meta content)))))
 
-      (let ((olnchar)
-	    (symbols))
+      (let ((olnchar) (symbols) (is-function-closure))
 	;; the olnchar variable is needed to handle characters that may be functional or part
 	;; of a number based on their context; in APL it's the . character, which may begin a number like .5
 	;; or may work as the inner/outer product operator, as in 1 2 3+.×4 5 6.
@@ -804,7 +805,8 @@
 			  (=vex-closure "[]" (handle-axes
 					      (lambda (meta) (setf symbols
 								   (append symbols (getf meta :symbols))))))
-			  (=vex-closure "{}" #'handle-function)
+			  (=vex-closure "{}" #'handle-function
+					:if-confirmed (lambda () (setq is-function-closure t)))
 			  (=vex-errant-closing-character ")]}([{")
 			  (=string #\' #\")
 			  (=transform (=subseq (%some (?satisfies functional-character-matcher)))
@@ -843,10 +845,15 @@
 		     (%any (?blank-character))
 		     (=subseq (%any (?newline-character)))
 		     (=subseq (%any (?satisfies 'characterp))))
-	    ;; (print (list :sym symbols item special-precedent))
+	    ;; (print (list :sym symbols item special-precedent is-function-closure))
 	    (if (or symbols (member :symbols special-precedent))
-		(setf (getf special-precedent :symbols)
-		      (append symbols (getf special-precedent :symbols))))
+		(progn (setf (getf special-precedent :symbols)
+			     (append symbols (getf special-precedent :symbols)))
+		       ;; don't collect internal symbols within a set of axes; this
+		       ;; prevents problems with cases like refn←{A←⍵-1 ⋄ $[A≥0;A,refn A;0]} ⋄ refn 5
+		       (if is-function-closure
+			   (setf (getf special-precedent :internal-symbols)
+				 (intersection symbols (getf special-precedent :symbols))))))
 	    (if (and (not output) (stringp item) (< 0 (length item))
 		     (funcall (of-utilities idiom :match-newline-character)
 			      (aref item 0)))
@@ -1011,9 +1018,7 @@ These are examples of the output of the three macro-builders above.
 			      (parse lines (=vex-string idiom))
 			    (let ((out (funcall (or (of-utilities idiom :lexer-postprocess)
 						    (lambda (a b c) a))
-						out idiom space)
-				    ;; out
-				    ))
+						out idiom space)))
 			      (process-lines remaining
 					     (if (null out)
 						 output (append output

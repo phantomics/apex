@@ -768,10 +768,13 @@ It remains here as a standard against which to compare methods for composing APL
 		       (apply-props form properties)
 		       form))))))
 
-(defun output-function (form &optional arguments lexical-variable-symbols)
+(defun output-function (form &optional arguments assigned-symbols arg-symbols)
   "Express an APL inline function like {⍵+5}."
-  (let ((assigned-symbols (rest (assoc :assigned lexical-variable-symbols)))
-	(arg-symbols (rest (assoc :args lexical-variable-symbols)))
+  (let ((assigned-symbols (loop :for sym :in assigned-symbols
+			     :when (not (member (string-upcase sym)
+						'("*INDEX-ORIGIN*" "*COMPARISON-TOLERANCE*")
+						:test #'string=))
+			     :collect `((inws ,sym))))
 	(arguments (if arguments (mapcar (lambda (item) `(inws ,item)) arguments))))
     (funcall (if (not (intersection arg-symbols '(⍺⍺ ⍵⍵)))
 		 ;; the latter case wraps a user-defined operator
@@ -781,12 +784,7 @@ It remains here as a standard against which to compare methods for composing APL
 	     `(alambda ,(if arguments arguments `(⍵ &optional ⍺))
 		(declare (ignorable ,@(if arguments arguments '(⍵ ⍺))))
 		,@(if (not assigned-symbols)
-		      form `((let ,(loop :for sym :in assigned-symbols
-				      :when (not (member (string-upcase sym)
-							 '("*INDEX-ORIGIN*" "*COMPARISON-TOLERANCE*")
-							 :test #'string=))
-				      :collect `((inws ,sym)))
-			       ,@form)))))))
+		      form `((let ,assigned-symbols ,@form)))))))
 
 (defun build-variable-declarations (input-vars space)
   "Create the set of variable declarations that begins April's compiled code."
@@ -882,17 +880,16 @@ It remains here as a standard against which to compare methods for composing APL
 	     (assign-self-refs-among-tokens token function)
 	     (funcall function token tokens tx))))
 
-(defun glean-symbols-from-tokens (tokens space &optional token-list is-strand-assignment)
+(defun get-assigned-symbols (tokens space &optional token-list is-nested is-strand-assignment)
   "Find a list of symbols within a token list which are assigned with the [← gets] lexical function. Used to find lists of variables to hoist in lambda forms."
   (let ((previous-token)
-	(is-stranded-assignment)
-	(token-list (or token-list (list (list :args) (list :assigned)))))
+	(token-list (or token-list (list :tokens))))
     (loop :for token :in tokens
        :do (if (and (listp token) (not (member (first token) '(:fn :op))))
 	       ;; recursively descend into lists, but not functions contained within a function,
 	       ;; otherwise something like {÷{⍺⍺ ⍵}5} will be read as an operator because an inline
 	       ;; operator is within it
-	       (glean-symbols-from-tokens token space token-list
+	       (glean-symbols-from-tokens token space token-list t
 					  (and (listp previous-token)
 					       (characterp (second previous-token))
 					       (char= #\← (second previous-token))
@@ -900,26 +897,17 @@ It remains here as a standard against which to compare methods for composing APL
 	       (if (and (not (keywordp token))
 			(symbolp token))
 		   (cond ((and (not (member token *idiom-native-symbols*))
-			       (not (member token (rest (assoc :assigned token-list))))
+			       (not (member token token-list))
 			       (not (boundp (intern (string token) space)))
 			       (or is-strand-assignment
 				   (and (listp previous-token)
 					(eql :fn (first previous-token))
 					(characterp (second previous-token))
 					(char= #\← (second previous-token)))))
-			  (if is-stranded-assignment
-			      (loop :for tk :in token :do
-				   (if (not (member tk (rest (assoc :assigned token-list))))
-				       (setf (rest (assoc :assigned token-list))
-					     (cons tk (rest (assoc :assigned token-list))))))
-			      (setf (rest (assoc :assigned token-list))
-				    (cons token (rest (assoc :assigned token-list))))))
-			 ((and (member token '(⍺ ⍵ ⍺⍺ ⍵⍵))
-			       (not (member token (rest (assoc :args token-list)))))
-			  (setf (rest (assoc :args token-list))
-				(cons token (rest (assoc :args token-list))))))))
+			  (setf (rest token-list)
+				(cons token (rest token-list)))))))
 	 (setq previous-token token))
-    token-list))
+    (if is-nested token-list (remove-duplicates (rest token-list)))))
 
 (defun invert-function (form &optional to-wrap)
   "Invert a function expression. For use with the [⍣ power] operator taking a negative right operand."

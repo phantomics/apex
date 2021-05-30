@@ -150,14 +150,14 @@
 	    	       '(:fn #\←) (guard symbol (and (symbolp symbol)
 	    					     (not (member symbol '(⍺⍺ ⍵⍵))))))
 	    	 (if (is-workspace-value symbol)
-	    	      (makunbound (intern (string symbol) space)))
+	    	     (makunbound (intern (string symbol) space)))
 	    	 (if (not (fboundp (intern (string symbol) space)))
 	    	     (setf (symbol-function (intern (string symbol) space)) #'dummy-nargument-function)))
 		((list (guard op-form (and (listp op-form)
 	    				   (eq :op (first op-form))
 	    				   (listp (second op-form))))
-	    	       '(:fn #\←) (guard symbol (and (symbolp symbol)
-	    					     (not (member symbol '(⍺⍺ ⍵⍵))))))
+	    	       '(:fn #\←) (guard symbol (or (and (symbolp symbol)
+	    						 (not (member symbol '(⍺⍺ ⍵⍵)))))))
 		 (let ((fn-symbol (intern (string symbol) space))
 		       (symbol (intern (concatenate 'string
 						    (if (eq :lateral (getf (second op-form) :valence))
@@ -1862,6 +1862,13 @@ c   2.56  3
            1 1   
  abc         c  2
  abc  12345678  3
+")
+  (for-printed "Mixed matrix of long numbers and small arrays."
+	       "2 3⍴10000,⊂2 2⍴⍳4"
+	       "10000    1 2  10000
+         3 4       
+  1 2  10000    1 2
+  3 4           3 4
 ")
   (for-printed "Nested vector of vectors." "↓⍣2⊢2 2⍴⍳4" "  1 2  3 4
 ")

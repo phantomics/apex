@@ -91,12 +91,13 @@
 			  (fn (if (not polyadic-args)
 				  fn (cons (butlast (first fn) 1)
 					   (rest fn))))
-			  (symbols-used (glean-symbols-from-tokens fn space))
-			  (is-inline-operator (intersection '(⍺⍺ ⍵⍵ ∇∇) (rest (assoc :args symbols-used)))))
-		     (setf (rest (assoc :assigned symbols-used))
-			   (loop :for sym :in (rest (assoc :assigned symbols-used))
-			      :when (not (member sym (getf (getf properties :special) :lexvar-symbols)))
-			      :collect sym))
+			  (initial-expr (first (last (first (last this-item)))))
+			  (multi-args (if (and (listp (first (last initial-expr)))
+					       (eq :axes (caar (last initial-expr))))
+					  (mapcar #'caar (cdar (last initial-expr)))))
+			  (assigned-symbols (get-assigned-symbols fn space))
+			  (arg-symbols (intersection '(⍺ ⍵ ⍺⍺ ⍵⍵ ∇∇) (getf (second this-item) :symbols)))
+			  (is-inline-operator (intersection arg-symbols '(⍺⍺ ⍵⍵ ∇∇))))
 		     ;; if this is an inline operator, pass just that keyword back
 		     (if is-inline-operator :is-inline-operator
 			 (values (output-function
@@ -105,12 +106,11 @@
 						     (list :special
 							   (list :lexvar-symbols
 								 (remove-duplicates
-								  (append (rest (assoc :assigned
-										       symbols-used))
+								  (append assigned-symbols
 									  (getf (getf properties :special)
 										:lexvar-symbols)))))))
 					  fn)
-				  polyadic-args symbols-used)
+				  polyadic-args assigned-symbols arg-symbols)
 				 (list :type '(:function :closure)
 				       :obligate-dyadic obligate-dyadic)))))
 		  (t (values nil nil))))
@@ -174,15 +174,16 @@
 	  (if (and (eql :op (first this-item))
 		   (listp (first (last this-item))))
 	      (let* ((fn (first (last this-item)))
-		     (symbols-used (glean-symbols-from-tokens fn space))
-		     (is-inline (intersection '(⍺⍺ ⍵⍵) (rest (assoc :args symbols-used))))
-		     (is-pivotal (member '⍵⍵ (rest (assoc :args symbols-used))))
+		     (assigned-symbols (get-assigned-symbols fn space))
+		     (arg-symbols (intersection '(⍺ ⍵ ⍺⍺ ⍵⍵ ∇∇) (getf (second this-item) :symbols)))
+		     (is-inline (intersection arg-symbols '(⍺⍺ ⍵⍵)))
+		     (is-pivotal (member '⍵⍵ arg-symbols))
 		     (valence (getf properties :valence)))
 		(if is-inline (if (or (not valence)
 				      (and is-pivotal (eq :pivotal valence))
 				      (and (not is-pivotal) (eq :lateral valence)))
 				  (values (output-function (mapcar process fn)
-							   nil symbols-used)
+							   nil assigned-symbols arg-symbols)
 					  (list :type (list :operator :closure
 							    (if is-pivotal :pivotal :lateral)))))
 		    (values nil nil)))
