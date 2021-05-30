@@ -65,8 +65,8 @@
   (asdf:load-system 'april-demo.cnn)
   (asdf:load-system 'april-demo.dfns.graph))
 
-(defun run-demo-tests ()
-  (april-demo.dfns.graph::run-tests))
+;; (defun run-demo-tests ()
+;;   (april-demo.dfns.graph::run-tests))
 
 (defun disclose-atom (item)
   "If the argument is a non-nested array with only one member, disclose it, otherwise do nothing."
