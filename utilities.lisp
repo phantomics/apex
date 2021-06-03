@@ -22,6 +22,8 @@
 
 (defvar *april-parallel-kernel*)
 
+(defvar *demo-packages* '(april-demo.cnn april-demo.dfns.graph))
+
 (defun make-threading-kernel-if-absent ()
   (if (not lparallel:*kernel*)
       (setq lparallel:*kernel* (setq *april-parallel-kernel*
@@ -61,12 +63,17 @@
 			     (funcall (formatter "𝕊~W") s (second list)) 
 			     (pprint-fill s list))))
 
-(defun load-demos ()
-  (asdf:load-system 'april-demo.cnn)
-  (asdf:load-system 'april-demo.dfns.graph))
-
-;; (defun run-demo-tests ()
-;;   (april-demo.dfns.graph::run-tests))
+(let ((demos-loaded))
+  (defun load-demos ()
+    (loop :for package-symbol :in *demo-packages* :do (asdf:load-system package-symbol))
+    (setq demos-loaded t))
+  
+  (defun run-demo-tests ()
+    (if demos-loaded (loop :for package-symbol :in *demo-packages* :do
+			  (let ((run-function-symbol (intern "RUN-TESTS" (string-upcase package-symbol))))
+			    (if (fboundp run-function-symbol)
+				(funcall (symbol-function run-function-symbol)))))
+	"Demo packages not loaded; cannot run demo tests. Load the demo packages with (load-demos) first.")))
 
 (defun disclose-atom (item)
   "If the argument is a non-nested array with only one member, disclose it, otherwise do nothing."
@@ -1186,9 +1193,39 @@ It remains here as a standard against which to compare methods for composing APL
 			      ((eq :operators type)
 			       `(:operators ,(first spec-body)))))))))
 
+(defmacro specify-demo (title params &rest sections)
+  (let ((params (rest params)))
+    `(progn (format t "~a ｢~a｣" ,title ,(package-name *package*))
+	    (princ #\Newline)
+	    ,@(if (getf params :description)
+		  `((princ ,(getf params :description))
+		    (princ #\Newline)))
+	    ,@(if (assoc :tests sections)
+		  (let* ((test-count 0)
+			 (items (loop :for item :in (rest (assoc :tests sections))
+				   :append (case (intern (string-upcase (first item)) "KEYWORD")
+					     (:provision `((format t "  [ ~a~%" ,(second item))
+							   (april (with (:space ,(getf params :space)))
+								  ,(second item))))
+					     (:is (incf test-count)
+						  `((format t "  _ ~a" ,(second item))
+						    (is (april (with (:space ,(getf params :space)))
+							       ,(second item))
+							,(third item) :test #'equalp)))))))
+		    `((progn (setq prove:*enable-colors* nil)
+			     (plan ,test-count)
+			     ,@items
+			     (setq prove:*enable-colors* t)
+			     (format t "~%~%"))))))))
+
 ;; a secondary package containing a set of tools for the extension of April idioms
 (defpackage #:april.idiom-extension-tools
   (:import-from :april #:extend-vex-idiom #:april-function-glyph-processor #:scalar-function)
   (:export #:extend-vex-idiom #:april-function-glyph-processor #:scalar-function
 	   #:λω #:λωα #:λωχ #:λωαχ))
+
+;; a secondary package containing a set of tools for specifying April demo packages
+(defpackage #:april.demo-definition-tools
+  (:import-from :april #:specify-demo)
+  (:export #:specify-demo))
 

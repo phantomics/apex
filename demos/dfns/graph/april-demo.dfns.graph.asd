@@ -7,7 +7,7 @@
   :license  "Apache-2.0"
   :version "0.0.1"
   :serial t
-  :depends-on ("april" "prove")
+  :depends-on ("april")
   :components ((:file "package")
 	       (:file "setup")
                (:file "demo")))

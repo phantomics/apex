@@ -10,32 +10,15 @@
 
 ;; directed graph.
 (defun run-tests ()
-  (setq prove:*enable-colors* nil)
-  (plan 4)
-
-  (princ "Tests for April graph demo.")
-  
-  (april (with (:space graph-demo-space))
-	 "g←(2 3) (3) (2 4) (1 5) (3)")
-  
-  ;; single vertex→vertex path.
-  (is (april (with (:space graph-demo-space))
-	     "g path 2 1 ")
-      #(2 3 4 1) :test #'equalp)
-  
-  ;; multiple vertex→vertex path.
-  (is (april (with (:space graph-demo-space))
-	     "g path (1 2)(4 5)")
-      #(2 3 4) :test #'equalp)
-
-  ;; each to every single vertex.
-  (is (april (with (:space graph-demo-space))
-	     "g∘path¨⍳5 5")
-      #2A((#(1) #(1 2) #(1 3) #(1 3 4) #(1 3 4 5))
-	  (#(2 3 4 1) #(2) #(2 3) #(2 3 4) #(2 3 4 5))
-	  (#(3 4 1) #(3 2) #(3) #(3 4) #(3 4 5))
-	  (#(4 1) #(4 1 2) #(4 5 3) #(4) #(4 5))
-	  (#(5 3 4 1) #(5 3 2) #(5 3) #(5 3 4) #(5)))
-      :test #'equalp)
-
-  (setq prove:*enable-colors* t))
+  (specify-demo
+   "April graph demo"
+   (with :space graph-demo-space
+	 :description "Implements graph processing functions from Dyalog's dfns.")
+   (:tests (provision "g←(2 3) (3) (2 4) (1 5) (3)")
+	   (is "g path 2 1 " #(2 3 4 1))
+	   (is "g path (1 2)(4 5)" #(2 3 4))
+	   (is "g∘path¨⍳5 5" #2A((#(1) #(1 2) #(1 3) #(1 3 4) #(1 3 4 5))
+				 (#(2 3 4 1) #(2) #(2 3) #(2 3 4) #(2 3 4 5))
+				 (#(3 4 1) #(3 2) #(3) #(3 4) #(3 4 5))
+				 (#(4 1) #(4 1 2) #(4 5 3) #(4) #(4 5))
+				 (#(5 3 4 1) #(5 3 2) #(5 3) #(5 3 4) #(5)))))))
