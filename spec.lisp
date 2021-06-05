@@ -1707,6 +1707,8 @@
                    5 5 5     
                    5 5 5     
 ")
+  (for-printed "Vector with enclosed nested vector." "8 (⊂1 5)" "8   1 5 
+")
   (for-printed "Single scalar character." "'A'" "A")
   (for-printed "Character vector (string)." "'ABCDE'" "ABCDE")
   (for-printed "Character matrix." "2 5⍴'ABCDEFGHIJ'" "ABCDE
