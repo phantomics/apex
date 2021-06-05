@@ -15,6 +15,13 @@
  (with :space graph-demo-space
        :description "Implements graph processing functions from Dyalog's dfns.")
  (:tests (provision "g←(2 3) (3) (2 4) (1 5) (3)")
+	 (is "g gperm 2 1 3 4 5" #(3 #(1 3) #(1 4) #(2 5) 3))
+	 (is "g gperm ⌽⍳⍴g" #(3 #(5 1) #(4 2) 3 #(4 3)))
+	 (is "g insnode 10" #(#(2 3) 3 #(2 4) #(1 5) 3 #() #() #() #() #()))
+	 (is "g remnode 3" #(#(2) #() #(1 4) #()))
+	 ;; TODO: add foldl remnode cases once foldl is in
+	 (is "g inslink 5 1" #(#(2 3) 3 #(2 4) #(1 5) #(3 1)))
+	 (is "g remlink 2 3" #(#(2 3) #() #(2 4) #(1 5) 3))
 	 (is "g path 2 1 " #(2 3 4 1))
 	 (is "g path (1 2)(4 5)" #(2 3 4))
 	 (is "g∘path¨⍳5 5" #2A((#(1) #(1 2) #(1 3) #(1 3 4) #(1 3 4 5))

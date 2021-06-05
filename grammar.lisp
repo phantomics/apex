@@ -13,7 +13,7 @@
 (defun process-value (this-item properties process idiom space)
   ;; TODO: add a passthrough value mode for symbols that are being assigned!
   ;; this is the only way to get them assignable after the first time
-  (cond ((and (listp this-item) ;; TODO: break this out into an is-closure predicate
+  (cond ((and (listp this-item)
 	      (not (member (first this-item) '(:fn :op :axes))))
 	 ;; if the item is a closure, evaluate it and return the result
 	 (multiple-value-bind (output out-properties)

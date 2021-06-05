@@ -29,6 +29,10 @@
 			#'char= (if (and (numberp a) (numberp o))
 				    #'= (lambda (a o) (declare (ignore a o)))))
 		    o a)))
+    (if (not (arrayp alpha))
+	(setq alpha (vector alpha))
+	(if (not (vectorp alpha))
+	    (error "The left argument to [~ without] must be a vector.")))
     (let ((included)
 	  (omega-vector (if (or (vectorp omega)	(not (arrayp omega)))
 			    (disclose omega)
@@ -338,20 +342,23 @@
 
 (defun unique (omega)
   "Return a vector of unique values in an array. Used to implement [∪ unique]."
-  (if (not (arrayp omega)) (vector omega)
-      (let ((vector (if (vectorp omega)
-			omega (re-enclose omega (make-array (1- (rank omega))
-							    :element-type 'fixnum
-							    :initial-contents
-							    (loop :for i :from 1 :to (1- (rank omega))
-							       :collect i))))))
-	(let ((uniques) (unique-count 0))
-	  (loop :for item :across vector :when (not (find item uniques :test #'array-compare))
-	     :do (setq uniques (cons item uniques)
-		       unique-count (1+ unique-count)))
-	  (funcall (lambda (result) (if (vectorp omega) result (mix-arrays 1 result)))
-		   (make-array unique-count :element-type (element-type vector)
-			       :initial-contents (reverse uniques)))))))
+  (if (not (arrayp omega))
+      (vector omega)
+      (if (= 0 (rank omega))
+	  (vector omega)
+	  (let ((vector (if (vectorp omega)
+			    omega (re-enclose omega (make-array (max 0 (1- (rank omega)))
+								:element-type 'fixnum
+								:initial-contents
+								(loop :for i :from 1 :to (1- (rank omega))
+								   :collect i))))))
+	    (let ((uniques) (unique-count 0))
+	      (loop :for item :across vector :when (not (find item uniques :test #'array-compare))
+		 :do (setq uniques (cons item uniques)
+			   unique-count (1+ unique-count)))
+	      (funcall (lambda (result) (if (vectorp omega) result (mix-arrays 1 result)))
+		       (make-array unique-count :element-type (element-type vector)
+				   :initial-contents (reverse uniques))))))))
 
 (defun array-union (omega alpha)
   "Return a vector of unique values from two arrays. Used to implement [∪ union]."
@@ -906,7 +913,9 @@
 			(and (arrayp right)
 			     (not (loop :for r :below (size right) :never (= (row-major-aref right r)
 									     (row-major-aref omega i))))))
-		    (incf (row-major-aref true-indices i))))
+		    (incf (row-major-aref true-indices i))
+		    (if (and (integerp right) (= i (- right index-origin)))
+			(incf (row-major-aref true-indices i)))))
 	      (let* ((tvix 0)
 		     (true-vector (make-array (loop :for i :across true-indices :summing i)
 					      :element-type (element-type omega))))
@@ -921,7 +930,11 @@
 		  (dotimes (i (size omega)) ;; xdo 
 	      	    (if (/= 0 (row-major-aref true-indices i))
 	      		(setf (row-major-aref omega-copy i)
-	      		      (row-major-aref to-assign (1- (row-major-aref true-indices i))))))
+	      		      (if (= 1 (length true-vector))
+				  ;; if there is only one true element the to-assign value is
+				  ;; the value to be assigned, not a vector of values to assign
+				  to-assign (row-major-aref to-assign
+							    (1- (row-major-aref true-indices i)))))))
 		  omega-copy))))
 	;; if the right argument is an array of rank > 1, assign the left operand values or apply the
 	;; left operand function as per choose or reach indexing
