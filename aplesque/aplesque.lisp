@@ -894,9 +894,9 @@
 	    (if (or populator (< 0 (size input)))
 		(xdotimes output (index output-length)
 		  (setf (row-major-aref output index)
-			(disclose (if populator (funcall populator)
-				      (let ((item (row-major-aref input (mod index input-length))))
-					(if (not (arrayp item)) item (copy-nested-array item))))))))
+			(if populator (funcall populator)
+			    (let ((item (row-major-aref input (mod index input-length))))
+			      (if (not (arrayp item)) item (copy-nested-array item)))))))
             output))))
 
 (defun near-realp (x)
@@ -2113,8 +2113,7 @@
 			       (last-col-type (aref col-types (1- last-coord)))
 			       (segments (aref col-segments last-coord)))
 	       (across input (lambda (elem coords)
-			       (let* ((last-coord (first (last coords)))
-				      (elem (disclose elem)))
+			       (let ((last-coord (first (last coords))))
 				 (flet ((add-column-types (&rest types)
 					  (loop :for type :in types
 					     :do (if (not (member type this-col-type))
@@ -2128,9 +2127,12 @@
 								elem (aref elem 0))))
 					 ((arrayp elem)
 					  ;; recurse to handle nested arrays, passing back the rendered character
-					  ;; array and adjusting the offsets to allow for its height and width
+					  ;; array and adjusting the offsets to allow for its height and width;
+					  ;; if the array is enclosed, surround it with spaces
+					  ;; to the right and left
 					  (let ((rendered (array-impress elem :format format :segment segment
-									 :prepend t)))
+									 :prepend (if (= 0 (rank elem))
+										      0 t))))
 					    ;; if a 1D array (string) is passed back, height defaults to 1
 					    (setf this-string rendered)
 					    
