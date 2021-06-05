@@ -1,8 +1,7 @@
-⍝  Ported from http://dfns.dyalog.com/c_path.htm into April APL
+⍝ Ported from http://dfns.dyalog.com/c_path.htm into April APL
 
 path ← {                                ⍝ Shortest path from/to ⍵ in graph ⍺.
-  graph←⍺                               ⍝ graph and entry/exit vertex vectors
-  (fm to)←⍵
+  graph (fm to)←⍺ ⍵                     ⍝ graph and entry/exit vertex vectors
   fm {                                  ⍝ fm is the starting-from vertex
     $[⍺≡⍬;⍬;                            ⍝ no vertices left: no path
       $[∨/to∊⍺;                         ⍝ found target: path from tree:

@@ -1,4 +1,3 @@
-;;; -*- Mode:Lisp; Syntax:ANSI-Common-Lisp; Coding:utf-8; Package:AprilDemo.Cnn -*-
 ;;;; april-demo.dfns.graph.asd
 
 (asdf:defsystem #:april-demo.dfns.graph

@@ -5,12 +5,18 @@
 
 "A set of functions implementing APL-like array operations. Used to provide the functional backbone of the April language."
 
+(defparameter *sub-7-bit-element-processing-register-size* 64)
+;; size of register used to hold array elements for processing when
+;; element size is under 7 bits
+
 (defun get-free-threads ()
+  "Find the number of threads currently available in the system."
   (let ((workers (lparallel.kernel::workers lparallel:*kernel*)))
     (loop :for w :across workers :when (not (lparallel.kernel::running-category w))
        :counting w :into total :finally (return total))))
 
-(defun sub-8-bit-integer-elements-p (array)
+(defun sub-7-bit-integer-elements-p (array)
+  "Return true if the argument is an array whose elements are integers narrower than 7 bits."
   (and (arrayp array)
        (let ((type (element-type array)))
 	 (or (eql 'bit type)
@@ -19,6 +25,7 @@
 		  (> 7 (second type)))))))
 
 (defmacro xdotimes (object clause &body body)
+  "Macro to perform array operations in parallel provisioning threads according to the type of array being assigned to."
   (let ((asym (gensym)) (eltype (gensym)) (free-threads (gensym))
 	(iterations (gensym)) (dividend (gensym)) (remainder (gensym))
 	(x (gensym)) (y (gensym)))
@@ -28,9 +35,13 @@
        (if (or (not lparallel:*kernel*)
 	       (= 0 ,free-threads))
 	   (dotimes ,clause ,@body)
-	   (if (sub-8-bit-integer-elements-p ,asym)
+	   (if (sub-7-bit-integer-elements-p ,asym)
+	       ;; if the array's elements are integers narrower than 7 bits, partition the array into chunks
+	       ;; according to the sub-7-bit operation register size ensuring one block is operated on
+	       ;; per thread; this prevents assignment collisions
 	       (let ((,iterations (if (eq 'bit ,eltype)
-				      64 (/ 64 (second ,eltype)))))
+				      *sub-7-bit-element-processing-register-size*
+				      (/ *sub-7-bit-element-processing-register-size* (second ,eltype)))))
 		 (multiple-value-bind (,dividend ,remainder) (ceiling ,(second clause) ,iterations)
 		   (pdotimes ,(list x dividend)
 		     (dotimes (,y (+ ,iterations (if (< ,x (1- ,dividend))
@@ -40,21 +51,24 @@
 	       (pdotimes ,(append clause (list nil free-threads)) ,@body))))))
 
 (defmacro ydotimes (object clause &body body)
+  "As xdotimes, but no provision is made for integer arrays with elements smaller than 7 bits; these are processed single-threaded."
   (let ((asym (gensym)) (eltype (gensym)) (free-threads (gensym)))
     `(let* ((,asym ,object)
 	    (,eltype (element-type ,asym))
 	    (,free-threads (get-free-threads)))
        (if (or (not lparallel:*kernel*)
 	       (= 0 ,free-threads)
-	       (sub-8-bit-integer-elements-p ,asym))
+	       (sub-7-bit-integer-elements-p ,asym))
 	   (dotimes ,clause ,@body)
 	   (pdotimes ,(append clause (list nil free-threads)) ,@body)))))
 
 (defun duplicate (object)
+  "Return a copy of the argument if it is an array, otherwise pass the argument back."
   (if (not (arrayp object))
       object (copy-array object)))
 
 (defun get-dimensional-factors (dimensions)
+  "Get the set of dimensional factors corresponding to a set of array dimensions."
   (let ((factor) (last-index))
     (reverse (loop :for d :in (reverse dimensions) :for dx :from 0
 		:collect (setq factor (if (= 0 dx) 1 (* factor last-index)))
@@ -80,30 +94,6 @@
 					dims (rest dims)))))
 		   (if simple-vector result)))))))
 
-(defun ranges-to-rmi-vector (ranges factors &optional vector count)
-  (let* ((count (or count 0))
-	 (range (first ranges))
-	 (factor (first factors))
-	 (vlength (reduce #'* (loop :for r :in ranges :collect (1+ (- (second r) (first r))))))
-	 (vector (or vector (make-array vlength :fill-pointer 0))))
-    (loop :for i :from (first range) :to (second range)
-       :do (if (not (rest ranges))
-	       (vector-push (+ count (* i factor)) vector)
-	       (ranges-to-rmi-vector (rest ranges) (rest factors) vector (+ count (* i factor)))))
-    vector))
-
-(defun segment-area (size section-count)
-  (let* ((section-count (min section-count size))
-	 (division-size (/ size section-count))
-	 (start-points (make-array (list section-count)))
-	 (section-lengths (make-array (list section-count))))
-    (loop :for i :below section-count :do (setf (aref start-points i) (floor (* i division-size))))
-    (loop :for i :below section-count :do (setf (aref section-lengths i)
-						(- (if (= i (1- section-count))
-						       size (aref start-points (1+ i)))
-						   (aref start-points i))))
-    (values start-points section-lengths section-count)))
-
 (defun varef (array subscripts)
   "Reference an element in an array according to a vector of subscripts."
   (row-major-aref array (rmi-from-subscript-vector array subscripts)))
@@ -119,6 +109,7 @@
       (= 1 (size value))))
 
 (defun enclose (item)
+  "Enclose an item as per APL's [⊂ enclose]."
   (if (not (arrayp item))
       item (make-array nil :initial-element item)))
 
@@ -549,9 +540,9 @@
 
 		  (if (< 0 isize)
 		      (if (and (< isize osize)
-			       (not (sub-8-bit-integer-elements-p input)))
-			  ;; choose shorter path depending on whether input or output are larger
-			  ;; always iterate over output in the case of sub-8-bit arrays as this is necessary
+			       (not (sub-7-bit-integer-elements-p input)))
+			  ;; choose shorter path depending on whether input or output are larger, and
+			  ;; always iterate over output in the case of sub-7-bit arrays as this is necessary
 			  ;; to respect the segmentation of the elements
 			  (ydotimes output (i isize)
 		      	    (let ((oindex 0) (remaining i) (valid t))
@@ -731,7 +722,7 @@
 			 (ydotimes output (ix this-degree)
 			   (setf (aref output (+ ix (if (= 0 degree) 0 (aref c-degrees (1- degree)))))
 				 value)))))
-		   (if (sub-8-bit-integer-elements-p input)
+		   (if (sub-7-bit-integer-elements-p input)
 		       (xdotimes output (i (size output))
 			 (multiple-value-bind (oseg remainder) (floor i odiv-size)
 			   (multiple-value-bind (oseg-index element-index) (floor remainder section-size)
@@ -1535,7 +1526,7 @@
 					     :element-type 'fixnum :displaced-index-offset axis)))
 		  (rotate to-rotate (- irank axis)))))
 
-	;; TODO: write case for sub-8-bit output where every element of the output is iterated over
+	;; TODO: write case for sub-7-bit output where every element of the output is iterated over
 	(ydotimes output (i total-size)
 	  (if (= 0 max-rank)
 	      (setf (row-major-aref output i) (disclose (row-major-aref input i)))
@@ -1614,14 +1605,10 @@
 		;; (print (list :ee i))
 		(loop :for ofactor :across output-factors :for ix :from 0
 		   :do (multiple-value-bind (index remainder) (floor remaining ofactor)
-			 ;; (if (= axis ix) (setq iindex index)
-			 ;; 	   (incf oindex (* index (row-major-aref output-factors (1- (incf odix))))))
 			 (if (= ix axis)
 			     (incf iindex (* i (aref input-factors axis))))
 			 (incf iindex (* index (aref input-factors (+ ix (if (< ix axis) 0 1)))))
-			 (setq remaining remainder)
-			 ;; (print (list :in index remainder))
-			 ))
+			 (setq remaining remainder)))
 		(if (= axis (rank output)) (incf iindex i))
 		(setf (row-major-aref output-element i)
 		      (row-major-aref input iindex))))))
@@ -1766,7 +1753,7 @@
 		   (vset-size (* increment (nth axis idims)))
 		   (output (make-array idims :element-type (element-type input)))
 		   (adjuster (if degrees #'identity (lambda (x) (abs (- x (1- rlen)))))))
-	      (xdotimes input (i (size input))
+	      (xdotimes output (i (size output))
 		(declare (optimize (safety 1)))
 		(let ((vindex (funcall adjuster
 				       (mod (+ (floor i increment)
@@ -1784,19 +1771,24 @@
 	      output)))
 
 (defun permute-axes (omega alpha)
+  "Permute an array according to a given new order of axes. If axis order indices are repeated, a diagonal traversal of the dimensions with repeated order indices is indicated."
   (let* ((idims (dims omega)) (irank (rank omega))
 	 (odims) (positions) (diagonals) (idims-reduced) (idfactor 1) (odfactor 1)
-	 (id-factors (reverse (loop :for d :in (reverse idims)
-				 :collect idfactor :do (setq idfactor (* d idfactor)))))
+	 (id-factors (coerce (reverse (loop :for d :in (reverse idims)
+					 :collect idfactor :do (setq idfactor (* d idfactor))))
+			     'vector))
 	 (indices (if alpha (progn (setq odims (loop :for i :below irank :collect nil))
 				   (if (vectorp alpha)
 				       (loop :for i :across alpha :for id :in idims :for ix :from 0
-					  :do (if (not (member i positions))
-						  ;; if a duplicate position is found, a diagonal section
-						  ;; is being performed
-						  (setf (nth i odims) (nth ix idims)
-							positions (cons i positions)
-							idims-reduced (cons id idims-reduced)))
+					  :do (setf (nth i odims) (if (nth i odims)
+								      (min (nth i odims)
+								       	   (nth ix idims))
+								      (nth ix idims)))
+					  ;; if a duplicate position is found, a diagonal section
+					  ;; is being performed
+					    (if (not (member i positions))
+					     	(setf positions (cons i positions)
+						      idims-reduced (cons id idims-reduced)))
 					    ;; collect possible diagonal indices into diagonal list
 					    (if (assoc i diagonals)
 						(setf (rest (assoc i diagonals))
@@ -1807,23 +1799,20 @@
 						    positions (cons alpha positions))
 					      (list alpha))))
 		      (reverse (iota irank))))
+	 (odims (remove nil odims))
 	 ;; remove indices not being used for diagonal section from diagonal list
 	 (diagonals (loop :for d :in diagonals :when (< 2 (length d)) :collect (rest d)))
 	 ;; the idims-reduced are a set of the original dimensions without dimensions being elided
 	 ;; for diagonal section, used to get the initial output array used for diagonal section
-	 (odims (or (if (not diagonals) odims (reverse idims-reduced))
-		    (reverse idims)))
-	 (od-factors (make-array irank))
+	 (odims (or odims (reverse idims)))
+	 (od-factors (make-array (length odims)))
 	 (s-factors (make-array irank))
-	 (output (make-array odims :element-type (element-type omega)))
-	 (output-linear (make-array (size output) :element-type (element-type omega)
-				    :displaced-to output :fill-pointer 0)))
+	 (output (make-array odims :element-type (element-type omega))))
     (loop :for d :in (reverse odims) :for dx :from 0
-       :do (setf (aref od-factors (- irank 1 dx)) odfactor
+       :do (setf (aref od-factors (- (length odims) 1 dx)) odfactor
 		 odfactor (* d odfactor)))
-    (loop :for ix :from 0 :for i :in id-factors
+    (loop :for i :across id-factors :for ix :from 0
        :do (setf (aref s-factors (nth ix indices)) i))
-    ;; (print (list :idf indices id-factors od-factors m-factors s-factors idims odims positions))
     (if (or (not alpha) (= irank (length positions)))
 	;; handle regular permutation cases
 	(xdotimes output (i (size output))
@@ -1834,27 +1823,15 @@
 			  (setq remaining remainder)))
 	    (multiple-value-bind (index remainder) (floor oindex (size omega))
 	      (setf (row-major-aref output i) (row-major-aref omega oindex)))))
-	(let ((diag-vals (make-array (length diagonals))))
-	  ;; handle diagonal array sections
-	  (dotimes (i (size omega))
-	    (loop :for i :below (length diag-vals) :do (setf (aref diag-vals i) nil))
-	    (let ((valid t) (index 0) (remaining i) (oindex 0))
-	      (loop :for ix :in indices :for if :in id-factors :for ii :from 0
-	  	 :do (multiple-value-bind (index remainder) (floor remaining if)
-		       (destructuring-bind (&optional diag diag-index)
-			   (loop :for d :in diagonals :for dx :from 0 :when (member ii d) :return (list d dx))
-			 (if diag (if (not (aref diag-vals diag-index))
-				      (setf (aref diag-vals diag-index) index)
-				      (if (/= index (aref diag-vals diag-index))
-					  (setq valid nil))))
-	  		 (setq remaining remainder)
-	  		 (incf oindex (* index (aref od-factors ix)))
-	  		 index)))
-	      (if valid (vector-push (row-major-aref omega i) output-linear))))
-	  (if (not (apply #'> positions))
-	      ;; if array positions for a diagonal section are not in their original order,
-	      ;; permute the initial output according to the new positions
-	      (setq output (permute-axes output (coerce (reverse positions) 'vector))))))
+	;; handle diagonal array traversals
+	(dotimes (i (size output))
+	  (let ((remaining i) (iindex 0))
+	    (loop :for ox :from 0 :for of :across od-factors
+	       :do (multiple-value-bind (index remainder) (floor remaining of)
+		     (setq remaining remainder)
+		     (loop :for a :in indices :for ax :from 0 :when (= a ox)
+			:do (incf iindex (* index (aref id-factors ax))))))
+	    (setf (row-major-aref output i) (row-major-aref omega iindex)))))
     output))
 
 (defun invert-matrix (in-matrix)

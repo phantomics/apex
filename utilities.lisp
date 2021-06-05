@@ -728,8 +728,8 @@ It remains here as a standard against which to compare methods for composing APL
 		    (-3 '(unsigned-byte 7)) (3 '(unsigned-byte 8)) (-4 '(unsigned-byte 15))
 		    (4 '(unsigned-byte 16)) (-5 '(unsigned-byte 31)) (5 '(unsigned-byte 32))
 		    (-6 '(unsigned-byte 63)) (6 '(unsigned-byte 64))
-		    (13 '(signed-byte 8)) (14 '(signed-byte 16)) (15 '(signed-byte 32)) 
-		    (-16 '(signed-byte 63)) (16 '(signed-byte 64)) (21 'fixnum) 
+		    (13 '(signed-byte 8)) (14 '(signed-byte 16)) (15 '(signed-byte 32))
+		    (-16 '(signed-byte 63)) (16 '(signed-byte 64)) (21 'fixnum)
 		    (31 'short-float) (32 'single-float)
 		    (34 'double-float) (35 'long-float)
 		    (98 'base-char) (99 'character))))
@@ -894,33 +894,32 @@ It remains here as a standard against which to compare methods for composing APL
 	     (assign-self-refs-among-tokens token function)
 	     (funcall function token tokens tx))))
 
-(defun get-assigned-symbols (tokens space &optional token-list is-nested is-strand-assignment)
+(defun get-assigned-symbols (tokens space &optional token-list is-nested in-assignment-context)
   "Find a list of symbols within a token list which are assigned with the [← gets] lexical function. Used to find lists of variables to hoist in lambda forms."
   (let ((previous-token)
 	(token-list (or token-list (list :tokens))))
     (loop :for token :in tokens
-       :do (if (and (listp token) (not (member (first token) '(:fn :op))))
-	       ;; recursively descend into lists, but not functions contained within a function,
-	       ;; otherwise something like {÷{⍺⍺ ⍵}5} will be read as an operator because an inline
-	       ;; operator is within it
-	       (get-assigned-symbols token space token-list t
-				     (and (listp previous-token)
-					  (characterp (second previous-token))
-					  (char= #\← (second previous-token))
-					  (loop :for tk :in token :always (symbolp tk))))
-	       (if (and (not (keywordp token))
-			(symbolp token))
-		   (cond ((and (not (member token *idiom-native-symbols*))
-			       (not (member token token-list))
-			       (not (boundp (intern (string token) space)))
-			       (or is-strand-assignment
-				   (and (listp previous-token)
-					(eql :fn (first previous-token))
-					(characterp (second previous-token))
-					(char= #\← (second previous-token)))))
-			  (setf (rest token-list)
-				(cons token (rest token-list)))))))
+       :do (if (and previous-token (listp previous-token)
+		    (eql :fn (first previous-token))
+		    (characterp (second previous-token))
+		    (char= #\← (second previous-token)))
+	       ;; once a ← is encountered, we're in an assignment context; symbols found after this point may
+	       ;; be added to the list to hoist if eligible
+	       (setq in-assignment-context t))
+	 (if (and (listp token) (not (member (first token) '(:fn :op))))
+	     ;; recurse into lists, but not functions contained within a function, otherwise something
+	     ;; like {÷{⍺⍺ ⍵}5} will be read as an operator because an inline operator is within it;
+	     ;; if an assignment context, that will be passed down to the next level of recursion
+	     ;; as for a (b c)←⍵
+	     (get-assigned-symbols token space token-list t in-assignment-context)
+	     (if (and in-assignment-context (symbolp token) (not (keywordp token)))
+		 (cond ((and (not (member token *idiom-native-symbols*))
+			     (not (member token token-list))
+			     (not (boundp (intern (string token) space))))
+			(setf (rest token-list)
+			      (cons token (rest token-list)))))))
 	 (setq previous-token token))
+    ;; TODO: write tests to ensure variable hoisting is done properly?
     (if is-nested token-list (remove-duplicates (rest token-list)))))
 
 (defun invert-function (form &optional to-wrap)
@@ -1195,37 +1194,38 @@ It remains here as a standard against which to compare methods for composing APL
 
 (defmacro specify-demo (title params &rest sections)
   (let ((params (rest params)))
-    `(progn (format t "~a ｢~a｣" ,title ,(package-name *package*))
-	    (princ #\Newline)
-	    ,@(if (getf params :description)
-		  `((princ ,(getf params :description))
-		    (princ #\Newline)))
-	    ,@(if (assoc :tests sections)
-		  (let* ((test-count 0)
-			 (items (loop :for item :in (rest (assoc :tests sections))
-				   :append (case (intern (string-upcase (first item)) "KEYWORD")
-					     (:provision `((format t "  [ ~a~%" ,(second item))
-							   (april (with (:space ,(getf params :space)))
-								  ,(second item))))
-					     (:is (incf test-count)
-						  `((format t "  _ ~a" ,(second item))
-						    (is (april (with (:space ,(getf params :space)))
-							       ,(second item))
-							,(third item) :test #'equalp)))))))
-		    `((progn (setq prove:*enable-colors* nil)
-			     (plan ,test-count)
-			     ,@items
-			     (setq prove:*enable-colors* t)
-			     (format t "~%~%"))))))))
+    `(progn (defun ,(intern "RUN-TESTS" (package-name *package*)) ()
+	      (format t "~a ｢~a｣" ,title ,(package-name *package*))
+	      (princ #\Newline)
+	      ,@(if (getf params :description)
+		    `((princ ,(getf params :description))
+		      (princ #\Newline)
+		      (princ #\Newline)))
+	      ,@(if (assoc :tests sections)
+		    (let* ((test-count 0)
+			   (items (loop :for item :in (rest (assoc :tests sections))
+				     :append (case (intern (string-upcase (first item)) "KEYWORD")
+					       (:provision `((format t "  ] ~a~%" ,(second item))
+							     (april (with (:space ,(getf params :space)))
+								    ,(second item))))
+					       (:is (incf test-count)
+						    `((format t "  _ ~a" ,(second item))
+						      (is (april (with (:space ,(getf params :space)))
+								 ,(second item))
+							  ,(third item) :test #'equalp)))))))
+		      `((progn (setq prove:*enable-colors* nil)
+			       (plan ,test-count)
+			       ,@items
+			       (setq prove:*enable-colors* t)
+			       (format t "~%~%")))))))))
 
-;; a secondary package containing a set of tools for the extension of April idioms
+;; a secondary package containing tools for the extension of April idioms
 (defpackage #:april.idiom-extension-tools
   (:import-from :april #:extend-vex-idiom #:april-function-glyph-processor #:scalar-function)
   (:export #:extend-vex-idiom #:april-function-glyph-processor #:scalar-function
 	   #:λω #:λωα #:λωχ #:λωαχ))
 
-;; a secondary package containing a set of tools for specifying April demo packages
+;; a secondary package containing tools for specifying April demo packages
 (defpackage #:april.demo-definition-tools
   (:import-from :april #:specify-demo)
   (:export #:specify-demo))
-

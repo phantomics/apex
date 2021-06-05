@@ -31,7 +31,6 @@ If you'd like to start with a specific playfield, you can do so by passing a thi
 (life -10 -10 (april "(3 3⍴⍳9)∊1 2 3 4 8"))
 
 This creates a 10x10 playfield with a glider in the lower right corner; that is, a -10, -10 take of the glider matrix. Passing 10 and 10 instead of -10 and -10 will result in a 10, 10 take with the glider shape in the upper left corner.
-
 |#
 
 (let ((life-array nil)

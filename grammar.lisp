@@ -323,10 +323,7 @@
 	  			   (if ,alpha (apl-call :fn ,(resolve-function :dyadic operand-form)
 	  		    				,omega ,alpha)
 	  		    	       (apl-call :fn ,(resolve-function :monadic operand-form)
-	  		    			 ,omega))))))
-	  	      ;; TODO: implement operand axes
-	  	      ;; operand-axes
-	  	      )
+	  		    			 ,omega)))))))
 		'(:type (:function :operator-composed :lateral))
 		items)
 	(let ((operator (and (member :operator (getf operator-props :type))
@@ -785,9 +782,8 @@
       ;; get left axes from the left operand and right axes from the precedent's properties so the
       ;; functions can be properly curried if they have axes specified
       (let ((right-operand (insym precedent))
-	    (right-operand-axes (first (getf (first preceding-properties) :axes)))
+	    (right-operand-axes (getf (first preceding-properties) :axes))
 	    (left-operand (insym left-operand))
-	    ;; (left-operand-axes (first (getf (second properties) :axes)))
 	    (omega (gensym)) (alpha (gensym)))
 	;; single character values are passed within a (:char) form so they aren't interpreted as
 	;; functional glyphs by the (resolve-function) calls
@@ -815,14 +811,14 @@
 						  (apl-call :fn ,(resolve-function :dyadic right-operand)
 							    ,omega ,alpha)
 						  (apl-call :fn ,(resolve-function :monadic right-operand)
-							    ,omega)))))
-				  ;; TODO: implement operand axes
-				  ;; operand-axes
-				  )
+							    ,omega))))))
 		    (cons 'apl-compose (cons (intern (string-upcase operator) *package-name-string*)
 					     (funcall (funcall (resolve-operator :pivotal operator)
-							       left-operand left-operand-axes
-							       right-operand right-operand-axes)
+							       ;; TODO: taking (first) of axes
+							       ;; eliminates possible future functions
+							       ;; that take more than one axis argument
+							       left-operand (first left-operand-axes)
+							       right-operand (first right-operand-axes))
 						      right-operand left-operand))))
 		'(:type (:function :operator-composed :pivotal)) items))))
 

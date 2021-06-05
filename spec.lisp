@@ -47,19 +47,19 @@
 
  ;; parameters for describing and documenting the idiom in different ways; currently, these options give
  ;; the order in which output from the blocks of tests is printed out for the (test) and (demo) options
- (doc-profiles (:test :lexical-functions-scalar-numeric :lexical-functions-scalar-logical
-		      :lexical-functions-array :lexical-functions-special :lexical-operators-lateral
-		      :lexical-operators-pivotal :lexical-operators-unitary :general-tests
-		      :system-variable-function-tests :function-inversion-tests
-		      :printed-format-tests)
-	       (:arbitrary-test :output-specification-tests)
-	       (:time :lexical-functions-scalar-numeric :lexical-functions-scalar-logical
-	       	      :lexical-functions-array :lexical-functions-special :lexical-operators-lateral
-	       	      :lexical-operators-pivotal :lexical-operators-unitary :general-tests)
-	       (:demo :general-tests :lexical-functions-scalar-numeric :lexical-functions-scalar-logical
-		      :lexical-functions-array :lexical-functions-special :lexical-operators-lateral
-		      :lexical-operators-pivotal :lexical-operators-unitary :system-variable-function-tests
-		      :function-inversion-tests :printed-format-tests))
+ (profiles (:test :lexical-functions-scalar-numeric :lexical-functions-scalar-logical
+		  :lexical-functions-array :lexical-functions-special :lexical-operators-lateral
+		  :lexical-operators-pivotal :lexical-operators-unitary :general-tests
+		  :system-variable-function-tests :function-inversion-tests
+		  :printed-format-tests)
+	   (:arbitrary-test :output-specification-tests)
+	   (:time :lexical-functions-scalar-numeric :lexical-functions-scalar-logical
+	       	  :lexical-functions-array :lexical-functions-special :lexical-operators-lateral
+	       	  :lexical-operators-pivotal :lexical-operators-unitary :general-tests)
+	   (:demo :general-tests :lexical-functions-scalar-numeric :lexical-functions-scalar-logical
+		  :lexical-functions-array :lexical-functions-special :lexical-operators-lateral
+		  :lexical-operators-pivotal :lexical-operators-unitary :system-variable-function-tests
+		  :function-inversion-tests :printed-format-tests))
 
  ;; utilities for compiling the language
  (utilities :match-blank-character (lambda (char) (member char '(#\  #\Tab) :test #'char=))
@@ -807,7 +807,25 @@
 	    (is "1 1 2⍉2 3 4⍴⍳24" #2A((1 2 3 4) (17 18 19 20)))
 	    (is "1 2 2⍉2 3 4⍴⍳24" #2A((1 6 11) (13 18 23)))
 	    (is "2 2 1⍉2 3 4⍴⍳24" #2A((1 17) (2 18) (3 19) (4 20)))
-	    (is "2 1 1⍉2 3 4⍴⍳24" #2A((1 13) (6 18) (11 23)))))
+	    (is "2 1 1⍉2 3 4⍴⍳24" #2A((1 13) (6 18) (11 23)))
+	    (is "3 2 2 1⍉2 5 3 4⍴⍳120" #3A(((1 61) (17 77) (33 93)) ((2 62) (18 78) (34 94))
+					   ((3 63) (19 79) (35 95)) ((4 64) (20 80) (36 96))))
+	    (is "3 2 1 3⍉2 5 3 4⍴⍳120" #3A(((1 62) (13 74) (25 86) (37 98) (49 110))
+					   ((5 66) (17 78) (29 90) (41 102) (53 114))
+					   ((9 70) (21 82) (33 94) (45 106) (57 118))))
+	    (is "1 2 1 1⍉3 2 7 2⍴⍳84" #2A((1 15) (32 46)))
+	    (is "3 1 1 2⍉4 3 6 2⍴⍳144" #3A(((1 37 73 109) (2 38 74 110))
+					   ((15 51 87 123) (16 52 88 124))
+					   ((29 65 101 137) (30 66 102 138))))
+	    (is "1 1 2 2 3 3 3⍉3 2 3 4 2 4 3⍴⍳1728"
+		#3A(((1 17) (121 137) (241 257)) ((865 881) (985 1001) (1105 1121))))
+	    (is "3 1 3 2 2 3 2⍉3 2 3 4 2 4 3⍴⍳1728"
+		#3A(((1 676 1351) (38 713 1388)) ((289 964 1639) (326 1001 1676))))
+	    (is "3 2 2 2 2 2 1⍉3 2 3 4 2 4 3⍴⍳1728"
+		#3A(((1 577 1153) (424 1000 1576)) ((2 578 1154) (425 1001 1577))
+		    ((3 579 1155) (426 1002 1578))))
+	    (is "2 1 1 2 3 3 2⍉3 2 3 4 2 4 3⍴⍳1728"
+		#3A(((1 16) (602 617) (1203 1218)) ((385 400) (986 1001) (1587 1602))))))
   (/ (has :title "Replicate")
      (dyadic (λωαχ (expand-array alpha omega *last-axis* (quote (inws *value-meta*)) :compress-mode t)))
      (inverse (dyadic :plain (λωαχ (if (is-unitary omega)
@@ -1218,7 +1236,9 @@
   	    (is "⌊10_000×+∘÷/40/1" 16180)
   	    (is "fn←+/ ⋄ fn∘⍳¨2 5 8" #(3 15 36))
   	    (is "3 4⍴∘⍴2 4 5⍴9" #2A((2 4 5 2) (4 5 2 4) (5 2 4 5)))
-	    (is "(2 3 4 5∘+) 5" #(7 8 9 10))))
+	    (is "(2 3 4 5∘+) 5" #(7 8 9 10))
+	    (is "qq←-∘⌽ ⋄ qq 3 3⍴⍳9" #2A((-3 -2 -1) (-6 -5 -4) (-9 -8 -7)))
+	    (is "rr←-∘⌽[1] ⋄ rr 3 3⍴⍳9" #2A((-7 -8 -9) (-4 -5 -6) (-1 -2 -3)))))
   (⍤ (has :title "Rank / Atop")
      (pivotal (with-derived-operands (right right-fn-monadic right-fn-dyadic left-fn-monadic left-fn-dyadic)
 		(if (or right-fn-monadic right-fn-dyadic)
@@ -1497,13 +1517,13 @@
        "y[⍋y←1 8 4 2]" #(1 2 4 8))
   (for "Inline pivotal operation-derived function expression."
        "1 2 3 (∘.+) 4 5 6" #2A((5 6 7) (6 7 8) (7 8 9)))
-  ;; (for "Composed pivotal operation-derived function expression."
-  ;;     "1 2 3∘(×.+)⊢4 5 6" 315)
-  ;; (for "Multiple composed pivotal operations called in sequence."
-  ;;      "(4 5 6∘(∘.×)) (1 2 3∘(∘.+)) 10 20 30"
-  ;;      #3A(((44 84 124) (48 88 128) (52 92 132))
-  ;; 	   ((55 105 155) (60 110 160) (65 115 165))
-  ;; 	   ((66 126 186) (72 132 192) (78 138 198))))
+  (for "Composed pivotal operation-derived function expression."
+      "1 2 3∘(×.+)⊢4 5 6" 315)
+  (for "Multiple composed pivotal operations called in sequence."
+       "(4 5 6∘(∘.×)) (1 2 3∘(∘.+)) 10 20 30"
+       #3A(((44 84 124) (48 88 128) (52 92 132))
+  	   ((55 105 155) (60 110 160) (65 115 165))
+  	   ((66 126 186) (72 132 192) (78 138 198))))
   (for "Two-element monadic atop function train." "(↓⌽)4 5⍴⍳20"
        #(#(5 4 3 2 1) #(10 9 8 7 6) #(15 14 13 12 11) #(20 19 18 17 16)))
   (for "Two-element dyadic atop function train." "'mississippi'(⍸∊)'sp'" #(3 4 6 7 9 10))
@@ -1599,10 +1619,10 @@
   (for "Commutative inversion of addition."       "+⍨⍣¯1⊢64" 32)
   (for "Commutative inversion of multiplication." "×⍨⍣¯1⊢64" 8.0)
   (for "Commutative inversion of max and min."    "(⌈⍨⍣¯1⊢64),⌊⍨⍣¯1⊢64" #(64 64))
-  ;; (for "Inversion of commuted outer product." "((∘.×)∘4 5 6)⍣¯1⊢1 2 3∘.×4 5 6" #(1 2 3))
-  ;; (for "Inversion of commuted outer product, other side." "(1 2 3∘(∘.×))⍣¯1⊢1 2 3∘.×4 5 6" #(4 5 6))
-  ;; (for "More complex outer product inversion."
-  ;;      "((∘.×)∘4 5 6)⍣¯1⊢((∘.×)∘4 5 6) (1 2 3∘(∘.+)) 10 20 30" #2A((11 21 31) (12 22 32) (13 23 33)))
+  (for "Inversion of commuted outer product." "((∘.×)∘4 5 6)⍣¯1⊢1 2 3∘.×4 5 6" #(1 2 3))
+  (for "Inversion of commuted outer product, other side." "(1 2 3∘(∘.×))⍣¯1⊢1 2 3∘.×4 5 6" #(4 5 6))
+  (for "More complex outer product inversion."
+       "((∘.×)∘4 5 6)⍣¯1⊢((∘.×)∘4 5 6) (1 2 3∘(∘.+)) 10 20 30" #2A((11 21 31) (12 22 32) (13 23 33)))
   (for "Power set." "{⌿∘⍵¨↓⌽⍉2⊥⍣¯1⊢¯1+⍳2*≢⍵}'ab'" #("" "a" "b" "ab"))
   (for "Longer power set." "{⌿∘⍵¨↓⌽⍉2⊥⍣¯1⊢¯1+⍳2*≢⍵}'abc'"
        #("" "a" "b" "ab" "c" "ac" "bc" "abc"))

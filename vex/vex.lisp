@@ -266,7 +266,7 @@
        :do (setq output (cons section output)))
     output))
 
-(defun build-doc-profile (symbol spec mode section-names)
+(defun build-profile (symbol spec mode section-names)
   "Build a documentation or test profile from a set of section names in a Vex idiom specification."
   (let ((specs (loop :for subspec :in spec
 		  :when (or (string= "FUNCTIONS" (string-upcase (first subspec)))
@@ -370,11 +370,11 @@
 						 (build-lexicon)
 						 `((gethash ,char (getf op-specs ,this-key))
 						   ,(getf (rest this-lex) :operators))))))))
-	   (demo-forms (build-doc-profile symbol subspecs :demo (rest (assoc :demo (of-subspec doc-profiles)))))
-	   (test-forms (build-doc-profile symbol subspecs :test (rest (assoc :test (of-subspec doc-profiles)))))
-	   (timed-forms (build-doc-profile symbol subspecs :time (rest (assoc :time (of-subspec doc-profiles)))))
-	   (atest-forms (build-doc-profile symbol subspecs :test
-					   (rest (assoc :arbitrary-test (of-subspec doc-profiles)))))
+	   (demo-forms (build-profile symbol subspecs :demo (rest (assoc :demo (of-subspec profiles)))))
+	   (test-forms (build-profile symbol subspecs :test (rest (assoc :test (of-subspec profiles)))))
+	   (timed-forms (build-profile symbol subspecs :time (rest (assoc :time (of-subspec profiles)))))
+	   (atest-forms (build-profile symbol subspecs :test
+				       (rest (assoc :arbitrary-test (of-subspec profiles)))))
 	   ;; note: the pattern specs are processed and appended in reverse order so that their ordering in the
 	   ;; spec is intuitive, with more specific pattern sets such as optimization templates being included
 	   ;; after less specific ones like the baseline grammar

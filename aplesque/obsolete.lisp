@@ -3,7 +3,7 @@
 
 (in-package #:aplesque)
 
-;; an archive of old implementations, not as fast as current ones but historically interesting
+;; an archive of old APL function implementations, not as fast as current ones but historically interesting
 
 (defun catenate (a1 a2 axis)
   "Join two arrays along the specified axis."

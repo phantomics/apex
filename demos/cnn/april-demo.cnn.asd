@@ -1,4 +1,3 @@
-;;; -*- Mode:Lisp; Syntax:ANSI-Common-Lisp; Coding:utf-8; Package:AprilDemo.Cnn -*-
 ;;;; april-demo.cnn.asd
 
 (asdf:defsystem #:april-demo.cnn
