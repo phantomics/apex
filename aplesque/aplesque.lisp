@@ -859,20 +859,28 @@
 	      (setf (row-major-aref output i) out-array)))
 	  output))))
 
-(defun enlist (input &optional internal output (output-length 0))
+(defun enlist (input)
   "Create a vector containing all elements of the input array in ravel order, breaking down nested and multidimensional arrays."
   (if (or (not (arrayp input))
 	  (= 1 (array-total-size input)))
-      input (progn (dotimes (i (size input))
-		     (let ((item (row-major-aref input i)))
-		       (if (arrayp item) (multiple-value-bind (out new-length)
-					     (enlist item t output output-length)
-					   (setq output out output-length new-length))
-			   (setq output (cons item output)
-				 output-length (1+ output-length)))))
-		   (if internal (values output output-length)
-		       (make-array output-length :element-type (element-type input)
-				   :initial-contents (reverse output))))))
+      input (let ((index 0))
+	      (labels ((measure-array (in)
+			 (let ((length 0))
+			   (dotimes (i (size in))
+			     (incf length (if (not (arrayp (row-major-aref in i)))
+					      1 (measure-array (row-major-aref in i)))))
+			   length))
+		       ;; TODO: parallelize?
+		       (copy-contents (in destination)
+			 (dotimes (i (size in))
+			   (if (arrayp (row-major-aref in i))
+			       (copy-contents (row-major-aref in i) destination)
+			       (progn (setf (row-major-aref destination index)
+					    (row-major-aref in i))
+				      (incf index))))))
+		(let ((output (make-array (measure-array input) :element-type (element-type input))))
+		  (copy-contents input output)
+		  output)))))
 
 (defun reshape-to-fit (input output-dims &key (populator))
   "Reshape an array into a given set of dimensions, truncating or repeating the elements in the array until the dimensions are satisfied if the new array's size is different from the old."
@@ -1283,13 +1291,15 @@
 	       (match-indices (make-array (size input) :element-type 'fixnum :initial-element 0)))
 	  (xdotimes match-indices (i (size input))
 	    (if (equal target-head (row-major-aref input i))
-		(setf (row-major-aref match-indices i) 1)))
+		(setf (aref match-indices i) 1)))
 	  (xdotimes output (i (size output))
-	    (if (= 1 (row-major-aref match-indices i))
+	    (if (= 1 (aref match-indices i))
 		(let ((target-index 0)
 		      (target-matched t)
 		      (indices (rmi-convert idims i))
 		      (element-list (loop :for i :below (rank input) :collect nil)))
+		  ;; TODO: more optimization is possible here, the indices list is not needed if index
+		  ;; factors are calculated in succession
 		  (labels ((process-dims (starts extents limits count)
 			     (if starts (let ((start (first starts))
 					      (extent (first extents))
@@ -1479,115 +1489,117 @@
 	  (and (= 1 (array-total-size input))
 	       (not (arrayp (row-major-aref input 0)))))
       input
-      (let* ((each-type) (type) (output)
-	     (isize (size input)) (irank (rank input)) (total-size 0)
-	     (input-vector (make-array (size input) :displaced-to input :element-type (element-type input)))
-	     (each-interval (make-array (size input) :element-type 'fixnum))
-	     (max-rank (loop :for i :across input-vector :maximizing (rank i)))
-	     (orank (+ max-rank irank))
-	     (out-dims-vector (make-array max-rank :element-type 'fixnum))
-	     (ifactors (get-dimensional-factors (dims input)))
-	     (ifactor-matrix (make-array (list isize (max 0 (1- max-rank))) :element-type 'fixnum))
-	     (idims-holder (make-array max-rank :element-type 'fixnum :initial-element 0))
-	     (odims-holder (make-array orank :element-type 'fixnum :fill-pointer 0))
-	     (ofactors (make-array orank :element-type 'fixnum :initial-element 1)))
+      (if (= 0 (rank input))
+	  (aref input)
+	  (let* ((each-type) (type) (output)
+		 (isize (size input)) (irank (rank input)) (total-size 0)
+		 (input-vector (make-array (size input) :displaced-to input :element-type (element-type input)))
+		 (each-interval (make-array (size input) :element-type 'fixnum))
+		 (max-rank (loop :for i :across input-vector :maximizing (rank i)))
+		 (orank (+ max-rank irank))
+		 (out-dims-vector (make-array max-rank :element-type 'fixnum))
+		 (ifactors (get-dimensional-factors (dims input)))
+		 (ifactor-matrix (make-array (list isize (max 0 (1- max-rank))) :element-type 'fixnum))
+		 (idims-holder (make-array max-rank :element-type 'fixnum :initial-element 0))
+		 (odims-holder (make-array orank :element-type 'fixnum :fill-pointer 0))
+		 (ofactors (make-array orank :element-type 'fixnum :initial-element 1)))
 
-	(dotimes (ix isize)
-	  (let* ((i (aref input-vector ix))
-		 (this-size (size i)) (this-rank (rank i)))
-	    (incf total-size this-size)
-	    (if (= 0 ix) (setf (aref each-interval 0) this-size)
-		(setf (aref each-interval ix) (+ this-size (aref each-interval (1- ix)))))
-	    ;; find types and maximum dimensions for input sub-arrays
-	    (loop :for d :in (dims i) :for dx :from 0
-	       :do (let ((dmix (+ dx (- max-rank this-rank)))
-			 (this-type (if (arrayp i) (element-type i) (type-of i))))
-		     (setf (aref out-dims-vector dmix)
-			   (max d (aref out-dims-vector dmix))
-			   type (if (not type) this-type (type-in-common type this-type))
-			   (aref idims-holder dmix) d)))
-	    ;; calculate dimensional factors for the appropriate row of the factor matrix
-	    (loop :for r :from (- this-rank 2) :downto 0 :for i :from 0
-	       :do (setf (row-major-aref ifactor-matrix (+ r (* ix (1- max-rank))))
-		     	 (* (if (= i 0) 1 (row-major-aref ifactor-matrix (+ 1 r (* ix (1- max-rank)))))
-		     	    (aref idims-holder (- max-rank 1 i)))))))
+	    (dotimes (ix isize)
+	      (let* ((i (aref input-vector ix))
+		     (this-size (size i)) (this-rank (rank i)))
+		(incf total-size this-size)
+		(if (= 0 ix) (setf (aref each-interval 0) this-size)
+		    (setf (aref each-interval ix) (+ this-size (aref each-interval (1- ix)))))
+		;; find types and maximum dimensions for input sub-arrays
+		(loop :for d :in (dims i) :for dx :from 0
+		   :do (let ((dmix (+ dx (- max-rank this-rank)))
+			     (this-type (if (arrayp i) (element-type i) (type-of i))))
+			 (setf (aref out-dims-vector dmix)
+			       (max d (aref out-dims-vector dmix))
+			       type (if (not type) this-type (type-in-common type this-type))
+			       (aref idims-holder dmix) d)))
+		;; calculate dimensional factors for the appropriate row of the factor matrix
+		(loop :for r :from (- this-rank 2) :downto 0 :for i :from 0
+		   :do (setf (row-major-aref ifactor-matrix (+ r (* ix (1- max-rank))))
+		     	     (* (if (= i 0) 1 (row-major-aref ifactor-matrix (+ 1 r (* ix (1- max-rank)))))
+		     		(aref idims-holder (- max-rank 1 i)))))))
 
-	;; populate the vector of output dimensions according to the axis
-	(let ((axis-index 0)
-	      (outer (dims input)))
-	  (dotimes (odix (1+ irank))
-	    (if (and axis (= odix (- axis (min 1 axis-index))))
-		(progn (incf axis-index)
-		       (loop :for i :across out-dims-vector :do (vector-push i odims-holder)))
-		(if (> irank (- odix axis-index))
-		    (vector-push (nth (- odix axis-index) outer) odims-holder)))))
+	    ;; populate the vector of output dimensions according to the axis
+	    (let ((axis-index 0)
+		  (outer (dims input)))
+	      (dotimes (odix (1+ irank))
+		(if (and axis (= odix (- axis (min 1 axis-index))))
+		    (progn (incf axis-index)
+			   (loop :for i :across out-dims-vector :do (vector-push i odims-holder)))
+		    (if (> irank (- odix axis-index))
+			(vector-push (nth (- odix axis-index) outer) odims-holder)))))
 
-	;; populate vector of output dimensional factors
-	(loop :for i :from (- orank 2) :downto 0
-	   :do (setf (aref ofactors i) (* (aref odims-holder (1+ i))
-					  (if (= i (- orank 2))
-					      1 (aref ofactors (1+ i))))))
+	    ;; populate vector of output dimensional factors
+	    (loop :for i :from (- orank 2) :downto 0
+	       :do (setf (aref ofactors i) (* (aref odims-holder (1+ i))
+					      (if (= i (- orank 2))
+						  1 (aref ofactors (1+ i))))))
 
-	;; create output array
-	(setq output (make-array (loop :for d :across odims-holder :collect d)
-				 :element-type (or type t) :initial-element
-				 (if (eql 'character type) #\ (coerce 0 (or type t)))))
+	    ;; create output array
+	    (setq output (make-array (loop :for d :across odims-holder :collect d)
+				     :element-type (or type t) :initial-element
+				     (if (eql 'character type) #\ (coerce 0 (or type t)))))
 
-	;; rotate output array dimensional factors according to axis
-	;; algorithm: rotate last (vector length - x) elements y times
-	;; x = axis, y = output rank - axis
-	(if (/= axis irank)
-	    (if (= 0 axis) (rotate ofactors (- irank axis))
-		(let ((to-rotate (make-array (- orank axis) :displaced-to ofactors
-					     :element-type 'fixnum :displaced-index-offset axis)))
-		  (rotate to-rotate (- irank axis)))))
+	    ;; rotate output array dimensional factors according to axis
+	    ;; algorithm: rotate last (vector length - x) elements y times
+	    ;; x = axis, y = output rank - axis
+	    (if (/= axis irank)
+		(if (= 0 axis) (rotate ofactors (- irank axis))
+		    (let ((to-rotate (make-array (- orank axis) :displaced-to ofactors
+						 :element-type 'fixnum :displaced-index-offset axis)))
+		      (rotate to-rotate (- irank axis)))))
 
-	;; TODO: write case for sub-7-bit output where every element of the output is iterated over
-	(ydotimes output (i total-size)
-	  (if (= 0 max-rank)
-	      (setf (row-major-aref output i) (disclose (row-major-aref input i)))
-	      (let ((offset 0) (input-index 0) (out-index 0) (this-rank)
-		    (input-element) (this-index) (remaining) (input-rank-delta))
-		(loop :for s :across each-interval :for sx :from 0 :while (<= s i)
-		   :do (setq offset s
-	    		     input-index (1+ sx)))
-		(setq this-index (- i offset)
-		      remaining input-index
-		      this-rank (rank (aref input-vector input-index))
-		      input-rank-delta (- max-rank this-rank)
-		      input-element (aref input-vector input-index))
+	    ;; TODO: write case for sub-7-bit output where every element of the output is iterated over
+	    (ydotimes output (i total-size)
+	      (if (= 0 max-rank)
+		  (setf (row-major-aref output i) (disclose (row-major-aref input i)))
+		  (let ((offset 0) (input-index 0) (out-index 0) (this-rank)
+			(input-element) (this-index) (remaining) (input-rank-delta))
+		    (loop :for s :across each-interval :for sx :from 0 :while (<= s i)
+		       :do (setq offset s
+	    			 input-index (1+ sx)))
+		    (setq this-index (- i offset)
+			  remaining input-index
+			  this-rank (rank (aref input-vector input-index))
+			  input-rank-delta (- max-rank this-rank)
+			  input-element (aref input-vector input-index))
 
-		;; calculate row-major offset for outer array dimensions
-		(loop :for r :from 0 :to (- irank 2)
-		   :for ifactor :in ifactors :for ofactor :across ofactors
-		   :do (multiple-value-bind (index remainder) (floor remaining ifactor)
-			 (incf out-index (* index ofactor))
-			 (setq remaining remainder)))
+		    ;; calculate row-major offset for outer array dimensions
+		    (loop :for r :from 0 :to (- irank 2)
+		       :for ifactor :in ifactors :for ofactor :across ofactors
+		       :do (multiple-value-bind (index remainder) (floor remaining ifactor)
+			     (incf out-index (* index ofactor))
+			     (setq remaining remainder)))
 
-		(incf out-index (* remaining (aref ofactors (1- irank))))
-		(setq remaining this-index)
+		    (incf out-index (* remaining (aref ofactors (1- irank))))
+		    (setq remaining this-index)
 
-		(if (not (arrayp input-element))
-		    (setf (row-major-aref output out-index) input-element)
-		    (progn
-		      (if (= 0 (1- this-rank))
-			  ;; if the inner array/object is scalar, just assign its disclosed value
-			  ;; to the proper location in the output array
-			  (incf out-index (* this-index (aref ofactors (1- orank))))
-			  ;; else, calculate row-major index accoridng to inner array dimensions
-			  (loop :for r :below (1- this-rank)
-			     :for i :from irank :to (1- orank) :for ix :from 0
-			     :do (multiple-value-bind (index remainder)
-				     (floor remaining (row-major-aref ifactor-matrix
-								      (+ ix (* input-index (1- max-rank)))))
-				   (incf out-index (* index (aref ofactors (+ i input-rank-delta))))
-				   (if (= r (- this-rank 2))
-				       (incf out-index (* remainder (aref ofactors (+ 1 i input-rank-delta))))
-				       (setf remaining remainder)))))
-		      ;; (print (list :oo i out-index this-index))
-		      (setf (row-major-aref output out-index)
-			    (row-major-aref input-element this-index)))))))
-	output)))
+		    (if (not (arrayp input-element))
+			(setf (row-major-aref output out-index) input-element)
+			(progn
+			  (if (= 0 (1- this-rank))
+			      ;; if the inner array/object is scalar, just assign its disclosed value
+			      ;; to the proper location in the output array
+			      (incf out-index (* this-index (aref ofactors (1- orank))))
+			      ;; else, calculate row-major index accoridng to inner array dimensions
+			      (loop :for r :below (1- this-rank)
+				 :for i :from irank :to (1- orank) :for ix :from 0
+				 :do (multiple-value-bind (index remainder)
+					 (floor remaining (row-major-aref ifactor-matrix
+									  (+ ix (* input-index (1- max-rank)))))
+				       (incf out-index (* index (aref ofactors (+ i input-rank-delta))))
+				       (if (= r (- this-rank 2))
+					   (incf out-index (* remainder (aref ofactors (+ 1 i input-rank-delta))))
+					   (setf remaining remainder)))))
+			  ;; (print (list :oo i out-index this-index))
+			  (setf (row-major-aref output out-index)
+				(row-major-aref input-element this-index)))))))
+	    output))))
 
 (defun split-array (input &optional axis)
   "Split an array into a set of sub-arrays."
@@ -1635,53 +1647,49 @@
   (if (and (not axes) (> 2 (rank input)))
       (if (= 1 (rank input))
 	  input (make-array 1 :initial-element input :element-type (assign-element-type input)))
-      (if axes (cond ((and (numberp (first axes))
-			   (not (integerp (first axes))))
-		      (make-array (if (not (first axes))
-				      (append (dims input)
-					      '(1))
-				      (funcall (lambda (lst index)
-						 (if (= 0 index)
-						     (setq lst (cons 1 lst))
-						     (push 1 (cdr (nthcdr (1- index) lst))))
-						 lst)
-					       (dims input)
-					       (- (ceiling (first axes))
-						  count-from)))
-				  :element-type (element-type input) :displaced-to (copy-nested-array input)))
-		     ;; TODO: fix these clauses
-		     ;; ((and (< 1 (length (first axes)))
-		     ;; 	 (or (> 0 (aref (first axes) 0))
-		     ;; 	     (> (aref (first axes) (1- (length (first axes))))
-		     ;; 		(rank input))
-		     ;; 	     (not (loop :for index :from 1 :to (1- (length (first axes)))
-		     ;; 		     :always (= (aref (first axes) index)
-		     ;; 				(1+ (aref (first axes) (1- index))))))))
-		     ;;  (error (concatenate 'string "Dimension indices must be consecutive and within "
-		     ;; 			"the array's number of dimensions.")))
-		     ((or (integerp (first axes))
-			  (< 0 (length (first axes))))
-		      ;; TODO: eliminate consing here
-		      (let* ((axl (if (not (arrayp (first axes)))
-				      (list (first axes))
-				      (mapcar (lambda (item) (- item count-from))
-					      (array-to-list (first axes)))))
-			     (collapsed (apply #'* (mapcar (lambda (index) (nth index (dims input)))
-							   axl))))
-			(labels ((dproc (dms &optional index output)
-				   (let ((index (if index index 0)))
-				     (if (not dms)
-					 (reverse output)
-					 (dproc (if (= index (first axl))
-						    (nthcdr (length axl) dms)
-						    (rest dms))
-						(1+ index)
-						(cons (if (= index (first axl))
-							  collapsed (first dms))
-						      output))))))
-			  (make-array (dproc (dims input))
-				      :element-type (element-type input)
-				      :displaced-to (copy-nested-array input))))))
+      (if axes (let ((axis (first axes))
+		     (idims (dims input)))
+		 (cond ((and (numberp axis)
+			     (not (integerp axis)))
+			;; if the axis is fractional, insert a new 1-length axis at the indicated position
+			(make-array (let ((index (- (ceiling axis) count-from)))
+				      (if (= 0 index)
+					  (setq idims (cons 1 idims))
+					  (push 1 (cdr (nthcdr (1- index) idims))))
+				      idims)
+				    :element-type (element-type input) :displaced-to (copy-nested-array input)))
+		       ;; throw an error in the case of an invalid axis
+		       ((and (vectorp axis)
+			     (< 1 (length axis))
+		     	     (or (> 0 (aref axis 0))
+		     		 (< (rank input) (aref axis (1- (length axis))))
+		     		 (not (loop :for index :from 1 :to (1- (length axis))
+		     			 :always (= (aref axis index)
+		     				    (1+ (aref axis (1- index))))))))
+			(error "Dimension indices passed to [, ravel] must be consecutive ~a"
+			       "and within the array's number of dimensions."))
+		       ((or (integerp axis)
+			    (< 0 (length axis)))
+			(let ((collapsed 1)
+			      (axis (enclose-atom axis)))
+			  (loop :for a :below (length axis)
+			     :do (setq collapsed (* collapsed (nth (setf (aref axis a)
+									 (- (aref axis a) count-from))
+								   (dims input)))))
+			  (labels ((dproc (dms &optional index output)
+				     (let ((index (if index index 0)))
+				       (if (not dms)
+					   (reverse output)
+					   (dproc (if (= index (aref axis 0))
+						      (nthcdr (length axis) dms)
+						      (rest dms))
+						  (1+ index)
+						  (cons (if (= index (aref axis 0))
+							    collapsed (first dms))
+							output))))))
+			    (make-array (dproc (dims input))
+					:element-type (element-type input)
+					:displaced-to (copy-nested-array input)))))))
 	  ;; TODO: this generates an array of type vector, not simple-array since it's displaced, is this a
 	  ;; problem? Look into it
 	  (make-array (array-total-size input) :element-type (element-type input)
