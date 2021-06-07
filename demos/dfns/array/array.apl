@@ -30,15 +30,14 @@ alset ← {                                   ⍝ Assoc list ⍺ with (key value
 
 ⍝ From http://dfns.dyalog.com/c_enlist.htm
 
-enlist ← {           ⍝ List ⍺-leaves of nested array.
-  ⍺←0                 ⍝ default: list 0-leaves.
-  $[⍺≥¯1+|≡⍵;,⍵;         ⍝ all shallow leaves: finished.
-    1↓↑,/(⊂⊂⊃⊃⍵),⍺ ∇¨,⍵ ⍝ otherwise: concatenate sublists.
+enlist ← {                                  ⍝ List ⍺-leaves of nested array.
+  $[⍺≥¯1+|≡⍵;,⍵;                            ⍝ all shallow leaves: finished.
+    1↓↑,/(⊂⊂⊃⊃⍵),⍺ ∇¨,⍵                     ⍝ otherwise: concatenate sublists.
    ]
 }
 
 ⍝ From http://dfns.dyalog.com/n_foldl.htm
 
-foldl← {             ⍝ Fold (reduce) from the left.
+foldl ← {                                   ⍝ Fold (reduce) from the left.
   ↑⍺⍺⍨/(⌽⍵),⊂⍺
 }

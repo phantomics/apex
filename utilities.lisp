@@ -22,7 +22,7 @@
 
 (defvar *april-parallel-kernel*)
 
-(defvar *demo-packages* '(april-demo.cnn april-demo.dfns.graph))
+(defvar *demo-packages* '(april-demo.cnn april-demo.dfns.array april-demo.dfns.graph))
 
 (defun make-threading-kernel-if-absent ()
   (if (not lparallel:*kernel*)
@@ -517,8 +517,11 @@
   (if (characterp reference)
       (if axes `(λχ ,(of-functions this-idiom reference mode) ,axes)
 	  (of-functions this-idiom reference mode))
-      (if (and (symbolp reference) (fboundp reference))
-	  `(function ,reference)
+      (if (symbolp reference)
+	  (if (fboundp reference)
+	      `(function ,reference)
+	      (if (eql '∇ reference)
+		  `#'∇self))
 	  ;; TODO: can the logic determining if something is not a function be improved?
 	  (if (and (listp reference)
 		   (or (eql 'lambda (first reference))

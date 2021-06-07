@@ -1,27 +1,39 @@
 ⍝ Ported from http://dfns.dyalog.com/n_Graphs.htm into April APL
 
+⍝ From http://dfns.dyalog.com/n_alists.htm
+
 gperm ← {                               ⍝ ⍵-permutation of vertices of graph ⍺.
   (⊂⍵)⍳¨⍺[⍵]
 }
 
+⍝ From http://dfns.dyalog.com/n_insnode.htm
+
 insnode ← {                             ⍝ Insert vertex ⍵ in graph ⍺.
   (⍵⌈⍴⍺)↑⍺,⍵⍴⊂⍬                         ⍝ extend graph with sufficient nulls.
 }
+
+⍝ From http://dfns.dyalog.com/n_remnode.htm
 
 remnode ← {                             ⍝ Remove vertex ⍵ from graph ⍺.
   new←(⍵≠⍳⍴⍺)/⍺~¨⍵                      ⍝ graph with vertex ⍵ removed,
   new-new>⍵                             ⍝ and edges adjusted.
 }
 
+⍝ From http://dfns.dyalog.com/n_inslink.htm
+
 inslink ← {                             ⍝ Graph ⍺ with new edge ⍵.
   fm to←⍵                               ⍝ edge
   ∪∘to¨@fm⊢⍺                            ⍝ graph with new edge ⍵.
 }
 
+⍝ From http://dfns.dyalog.com/n_remlink.htm
+
 remlink ← {                             ⍝ Graph ⍺ without edge ⍵.
   fm to←⍵                               ⍝ edge
   ~∘to¨@fm⊢⍺                            ⍝ graph without edge ⍵.
 }
+
+⍝ From http://dfns.dyalog.com/n_search.htm
 
 search ← {                              ⍝ Breadth-first search of graph ⍺.
   graph←⍺                               ⍝ ⍺ is graph vector.
@@ -33,6 +45,8 @@ search ← {                              ⍝ Breadth-first search of graph ⍺.
        ]
   }⍵                                    ⍝ from starting vertex.
 }
+
+⍝ From http://dfns.dyalog.com/n_path.htm
 
 path ← {                                ⍝ Shortest path from/to ⍵ in graph ⍺.
   graph (fm to)←⍺ ⍵                     ⍝ graph and entry/exit vertex vectors
@@ -48,6 +62,8 @@ path ← {                                ⍝ Shortest path from/to ⍵ in graph
         (∪wave) ∇ back@wave⊢⍵]]         ⍝ advanced wave front
   }¯2+(⍳⍴⍺)∊fm                          ⍝ null spanning tree
 }
+
+⍝ From http://dfns.dyalog.com/n_span.htm
 
 span ← {                                ⍝ Breadth-first spanning tree for graph ⍺.
   graph←⍺                               ⍝ ⍺ is graph vector.
@@ -72,3 +88,14 @@ span ← {                                ⍝ Breadth-first spanning tree for gr
 ⍝   }                       ⍝ :: tree ← vtx (vtx ∇∇) tree
 ⍝   ⍵(¯1 trav)¯2⊣¨⍺         ⍝ depth-first traversal of graph ⍵
 ⍝ }
+
+⍝ From http://dfns.dyalog.com/n_stpath.htm
+
+stpath ← {                              ⍝ Path through spanning tree ⍺ to vertex ⍵.
+  tree←⍺                                ⍝ (partial) spanning tree.
+  ⍬{                                    ⍝ path accumulator.
+    $[⍵<0;(⍵=¯2)↓⍺;                     ⍝ root or unvisited vertex: finished.
+      (⍵,⍺)∇ ⍵⊃tree                     ⍝ otherwise: prefix previous (parent) vertex.
+     ]
+  }⍵
+}

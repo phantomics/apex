@@ -1084,7 +1084,8 @@
 	    (is "4,/⍳12" #(#(1 2 3 4) #(2 3 4 5) #(3 4 5 6) #(4 5 6 7) #(5 6 7 8)
 			   #(6 7 8 9) #(7 8 9 10) #(8 9 10 11) #(9 10 11 12)))
 	    (is "⊃,/3 4+/¨⊂3 6⍴⍳9"
-		#2A((6 9 12 15 10 14 18) (24 18 12 6 25 20 15) (15 18 21 24 22 26 30)))))
+		#2A((6 9 12 15 10 14 18) (24 18 12 6 25 20 15) (15 18 21 24 22 26 30)))
+	    (is "⊃,/(⊂'abc') 'def' 'ghi'" #("abc" #\d #\e #\f #\g #\h #\i))))
   (⌿ (has :title "Reduce First")
      (lateral (with-derived-operands (axes left-glyph left-fn-dyadic)
 		(let ((axes (if axes `(- ,(first axes) index-origin))))
