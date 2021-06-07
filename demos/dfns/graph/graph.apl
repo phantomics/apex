@@ -1,4 +1,4 @@
-⍝ Ported from http://dfns.dyalog.com/c_path.htm into April APL
+⍝ Ported from http://dfns.dyalog.com/n_Graphs.htm into April APL
 
 gperm ← {                               ⍝ ⍵-permutation of vertices of graph ⍺.
   (⊂⍵)⍳¨⍺[⍵]

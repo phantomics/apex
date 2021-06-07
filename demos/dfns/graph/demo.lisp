@@ -3,10 +3,6 @@
 
 (in-package :april-demo.dfns.graph)
 
-(april (with (:space graph-demo-space)
-	     (:store-fun (test-print (lambda (item) (print item)))))
-       "")
-
 (april-load (with (:space graph-demo-space))
 	    (asdf:system-relative-pathname (intern (package-name *package*) "KEYWORD") "graph.apl"))
 

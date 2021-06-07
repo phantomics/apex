@@ -2,7 +2,7 @@
 
 #+asdf3 (in-package :asdf-user)
 
-(defsystem maxpc-test
+(defsystem maxpc-apache
   :description
   "Test and benchmark suite for MaxPC."
   :author "Max Rottenkolber <max@mr.gy>"
@@ -10,5 +10,5 @@
   :components ((:file "test")
                (:file "bench")
                (:file "example-sexp"))
-  :depends-on ("maxpc")
+  :depends-on ("maxpc-apache")
   :perform (test-op (o s) #+asdf3 (uiop:symbol-call :maxpc.test :run-tests)))
