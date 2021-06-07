@@ -3,11 +3,11 @@
 
 (in-package :april-demo.dfns.graph)
 
-(april-load (with (:space graph-demo-space))
-	    (asdf:system-relative-pathname (intern (package-name *package*) "KEYWORD") "graph.apl"))
-
 (april-load (with (:space graph-demo-space)) ;; load array.apl for foldl function
 	    (asdf:system-relative-pathname :april-demo.dfns.array "array.apl"))
+
+(april-load (with (:space graph-demo-space))
+	    (asdf:system-relative-pathname (intern (package-name *package*) "KEYWORD") "graph.apl"))
 
 (specify-demo
  "April graph demo"

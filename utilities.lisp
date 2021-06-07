@@ -518,10 +518,16 @@
       (if axes `(λχ ,(of-functions this-idiom reference mode) ,axes)
 	  (of-functions this-idiom reference mode))
       (if (symbolp reference)
-	  (if (fboundp reference)
+	  (if (or (fboundp reference))
 	      `(function ,reference)
 	      (if (eql '∇ reference)
-		  `#'∇self))
+		  '#'∇self (if (eql '∇∇ reference)
+			       '#'∇∇oself (if (member (string reference)
+						      '("⍺⍺" "⍵⍵") :test #'string=)
+					      ;; TODO: why do ⍺⍺ and ⍵⍵ get interned in the
+					      ;; workspace package in these cases?
+					      (intern (string reference)
+						      (package-name *package*))))))
 	  ;; TODO: can the logic determining if something is not a function be improved?
 	  (if (and (listp reference)
 		   (or (eql 'lambda (first reference))
