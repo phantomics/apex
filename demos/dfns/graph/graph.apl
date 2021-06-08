@@ -38,11 +38,11 @@ remlink ← {                             ⍝ Graph ⍺ without edge ⍵.
 search ← {                              ⍝ Breadth-first search of graph ⍺.
   graph←⍺                               ⍝ ⍺ is graph vector.
   ⍵{                                    ⍝ from starting vertex.
-      $[⍵≡⍬;⍺;                          ⍝ no unvisited vertices: done.
-        adjv←⍵⊃¨⊂graph                  ⍝ adjacent vertices.
-        next←∪(↑,/adjv)~⍺               ⍝ unvisited vertices.
-        (⍺,next)∇ next                  ⍝ advance wave of visited vertices.
-       ]
+    $[⍵≡⍬;⍺;                            ⍝ no unvisited vertices: done.
+      adjv←⍵⊃¨⊂graph                    ⍝ adjacent vertices.
+      next←∪(↑,/adjv)~⍺                 ⍝ unvisited vertices.
+      (⍺,next)∇ next                    ⍝ advance wave of visited vertices.
+     ]
   }⍵                                    ⍝ from starting vertex.
 }
 
@@ -77,17 +77,19 @@ span ← {                                ⍝ Breadth-first spanning tree for gr
   }⍵                                    ⍝ ⍵: next wave of vertices to visit.
 }
 
-⍝ dfspan ← {                    ⍝ Depth-first spanning tree: graph ⍺ from vertex ⍵.
-⍝   graph←⍺                 ⍝ ⍺ is graph vector.
-⍝   trav ← {                  ⍝ initial vertex and parent
-⍝     $[¯2≠⍺⊃⍵;⍵;            ⍝ vertex visited: backtrack
-⍝       next←⌽⍺⊃graph       ⍝ edges from vertex ⍺
-⍝       tree←⍺⍺@⍺⊢⍵         ⍝ ⍺⍺ is ⍺'s parent
-⍝       ⊃⍺ ∇∇/next,⊂tree    ⍝ visiting each edge in order
-⍝      ]
-⍝   }                       ⍝ :: tree ← vtx (vtx ∇∇) tree
-⍝   ⍵(¯1 trav)¯2⊣¨⍺         ⍝ depth-first traversal of graph ⍵
-⍝ }
+⍝ From http://dfns.dyalog.com/c_dfspan.htm
+
+dfspan ← {                              ⍝ Depth-first spanning tree: graph ⍺ from vertex ⍵.
+  graph←⍺                               ⍝ ⍺ is graph vector.
+  trav ← {                              ⍝ initial vertex and parent
+    $[¯2≠⍺⊃⍵;⍵;                         ⍝ vertex visited: backtrack
+      next←⌽⍺⊃graph                     ⍝ edges from vertex ⍺
+      tree←⍺⍺@⍺⊢⍵                       ⍝ ⍺⍺ is ⍺'s parent
+      ⊃⍺ ∇∇/next,⊂tree                  ⍝ visiting each edge in order
+     ]
+  }                                     ⍝ :: tree ← vtx (vtx ∇∇) tree
+  ⍵(¯1 trav)¯2⊣¨⍺                       ⍝ depth-first traversal of graph ⍵
+}
 
 ⍝ From http://dfns.dyalog.com/n_stpath.htm
 

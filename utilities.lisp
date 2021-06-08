@@ -84,8 +84,15 @@
 (defmacro insym (symbol)
   "Macro used in grammar.lisp to intern value-referencing symbols in appropriate workspace package."
   `(if (or (not (symbolp ,symbol))
-	   (member ,symbol '(⍵ ⍺))) ;; TODO: this is a hack for now, create a list of all reserved symbol names
+	   (member ,symbol '(⍵ ⍺ ⍵⍵ ⍺⍺))) ;; TODO: this is a hack for now, create a list of all reserved symbol names
        ,symbol (intern (string ,symbol) space)))
+
+(defmacro ifn (symbol)
+  "Exposes either a function or a 'functionized' value. Used to handle ⍺⍺ and ⍵⍵ operands in user-defined operators."
+  (let ((o (gensym)) (a (gensym)))
+    `(if (functionp ,symbol)
+	 ,symbol (lambda (,o &optional ,a)
+		   (if ,a (catenate ,a (catenate (enclose ,symbol) ,o 0) 0))))))
 
 (defmacro alambda (params &body body)
   `(labels ((∇self ,params ,@body))
@@ -522,12 +529,8 @@
 	      `(function ,reference)
 	      (if (eql '∇ reference)
 		  '#'∇self (if (eql '∇∇ reference)
-			       '#'∇∇oself (if (member (string reference)
-						      '("⍺⍺" "⍵⍵") :test #'string=)
-					      ;; TODO: why do ⍺⍺ and ⍵⍵ get interned in the
-					      ;; workspace package in these cases?
-					      (intern (string reference)
-						      (package-name *package*))))))
+			       '#'∇∇oself (if (member reference '(⍺⍺ ⍵⍵))
+					      reference))))
 	  ;; TODO: can the logic determining if something is not a function be improved?
 	  (if (and (listp reference)
 		   (or (eql 'lambda (first reference))
@@ -803,6 +806,11 @@ It remains here as a standard against which to compare methods for composing APL
 		 ;; the latter case wraps a user-defined operator
 		 #'identity (lambda (form) `(olambda (⍺⍺ &optional ⍵⍵)
 					      (declare (ignorable ⍺⍺ ⍵⍵))
+					      ;; (let ((⍺⍺ (if (functionp ⍺⍺)
+					      ;; 		    ⍺⍺ (lambda (o &optional a x)
+					      ;; 			 (if x ⍺⍺
+					      ;; 			     (if a (catenate a (catenate ⍺⍺ o))
+					      ;; 				 (catenate ⍺⍺ o)))))))
 					      ,form)))
 	     `(alambda ,(if arguments arguments `(⍵ &optional ⍺))
 		(declare (ignorable ,@(if arguments arguments '(⍵ ⍺))))

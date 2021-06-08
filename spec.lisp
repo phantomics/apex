@@ -1206,7 +1206,7 @@
 	     (is "⍬∘.=⍬" #2A())
 	     (is "''∘.=''" #2A())
 	     (is "fn←{⍺×⍵+1} ⋄ 1 2 3∘.fn 4 5 6" #2A((5 6 7) (10 12 14) (15 18 21)))
-	     (is "' ' { (A W)←{(⍵≠(≢⍵)⍴' ')/⍵}¨⍺ ⍵ ⋄ ((⍴A)=⍴W) ∧ ∧/(+/A∘.=W) = +/A∘.=A } 'dog'" #(0))
+	     (is "' ' { A W←{(⍵≠(≢⍵)⍴' ')/⍵}¨⍺ ⍵ ⋄ ((⍴A)=⍴W) ∧ ∧/(+/A∘.=W) = +/A∘.=A } 'dog'" #(0))
 	     (is "⍴+.×⌿?2 30 30⍴1e10" #(30 30))))
   (∘ (has :title "Compose")
      (pivotal (with-derived-operands (right left right-glyph right-fn-monadic right-fn-dyadic
@@ -1293,8 +1293,13 @@
 	    (is "⌊1_000_000_000×2○⍣=1" 739085133)))
   (@ (has :title "At")
      (pivotal (with-derived-operands (right left right-fn-monadic left-fn-monadic left-fn-dyadic)
-		`(operate-at ,(if (not (or left-fn-dyadic left-fn-monadic)) left)
-			     ,(if (not right-fn-monadic) right)
+		`(operate-at ,(if (or (member left '(⍺⍺ ⍵⍵))
+			      	      (not (or left-fn-dyadic left-fn-monadic)))
+			      	  left)
+			     ;; ⍺⍺ or ⍵⍵ may be passed in case they are values rather than functions
+			     ,(if (or (member right '(⍺⍺ ⍵⍵))
+				      (not right-fn-monadic))
+				  right)
 			     ,left-fn-monadic ,left-fn-dyadic ,right-fn-monadic index-origin)))
      (tests (is "20 20@3 8⍳9" #(1 2 20 4 5 6 7 20 9))
 	    (is "(0@2 4)⍳9" #(1 0 3 0 5 6 7 8 9))
@@ -1568,6 +1573,14 @@
   (for "Inline pivotal operator in parentheses with internal ⋄ breaks." "3 (+{⍺⍺ 2 ⋄ ⍺ ⍵⍵ ⍵}÷) 4" 3/4)
   (for "Operator composition of function within defined operator."
        "filter←{(⍺⍺¨⍵)/⍵} ⋄ {2|⍵} filter ⍳20" #(1 3 5 7 9 11 13 15 17 19))
+  (for "Defined lateral operator with value passed as operand."
+       "3{⍺⍺+⍵}5" 8)
+  (for "Defined lateral operator with value passed as operand, argument positions reversed."
+       "2{⍵+⍺⍺}7" 9)
+  (for "Defined lateral operator with value passed as operand acting as catenating function."
+       "3{(1 2 ⍺⍺ 4 5)×⍵}9" #(9 18 27 36 45))
+  (for "As above without closure around catenating function."
+       "3{1 2 ⍺⍺ 4 5×⍵}9" #(1 2 3 36 45))
   (for "Array processing function applied over nested array."
        "{((5=¯1↑⍵)+1)⊃¯1 (⊂⍵)}¨(⊂1 5),⍨3⍴⊂⍳4" #(-1 -1 -1 #0A#(1 5)))
   (for "Indexed element of above array."

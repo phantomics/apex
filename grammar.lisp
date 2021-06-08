@@ -138,7 +138,8 @@
 		((eql this-item '∇)
 		 (values this-item (list :type '(:function :self-reference))))
 		((member this-item '(⍵⍵ ⍺⍺))
-		 (values this-item (list :type '(:function :operator-reference))))
+		 (values (list 'ifn this-item)
+			 (list :type '(:function :operator-reference))))
 		((member (intern (string-upcase this-item) *package-name-string*)
 			 (rest (assoc :function (idiom-symbols idiom))))
 		 (values (list 'function (getf (rest (assoc :function (idiom-symbols idiom)))
@@ -225,6 +226,12 @@
     			 items rest-items))
 	       (if (and axes (not items))
 		   (error "Encountered axes with no function, operator or value to the left."))
+	       (if (and (member (first items) '(⍺⍺ ⍵⍵))
+			(not (member :operand-composition (getf (getf properties :special) :omit))))
+		   (setq value-elements (cons (first items) value-elements)
+			 value-props (cons '(:type (:array :operand-represented)) value-props)
+			 items (rest items)))
+
 	       (loop :while (not stopped)
 		  :do (or (if (and (listp item) (eq :axes (first item)))
 			      ;; if axes are encountered, process the axes and the preceding
@@ -323,7 +330,8 @@
 	  			   (if ,alpha (apl-call :fn ,(resolve-function :dyadic operand-form)
 	  		    				,omega ,alpha)
 	  		    	       (apl-call :fn ,(resolve-function :monadic operand-form)
-	  		    			 ,omega)))))))
+	  		    			 ,omega))))
+			      operand-form)))
 		'(:type (:function :operator-composed :lateral))
 		items)
 	(let ((operator (and (member :operator (getf operator-props :type))
@@ -752,7 +760,8 @@
 									  ,omega ,alpha)
 								(apl-call :fn ,(resolve-function
 										:monadic left-operand)
-									  ,omega))))))
+									  ,omega)))
+							 left-operand)))
 			       ,precedent ,@(if left-value (list left-value))))
 		'(:type (:function :operator-composed :lateral :inline)) items))))
 
@@ -829,6 +838,7 @@
      (if (eq :array (first preceding-type))
 	 (progn (assign-subprocessed fn-element function-props
 				     `(:special (:omit (:function-assignment :value-assignment-by-selection
+									     :operand-composition
 									     :train-composition :operation)
 						       ,@include-lexvar-symbols)))
 		(setq is-function (eq :function (first (getf function-props :type)))
@@ -849,7 +859,8 @@
   (if is-function (let* ((fn-content (if (or (functionp fn-element)
 					     (member fn-element '(⍺⍺ ⍵⍵ ∇ ∇∇))
 					     (and (listp fn-element)
-						  (eql 'function (first fn-element))))
+						  (or (eql 'function (first fn-element))
+						      (eql 'ifn (first fn-element)))))
 					 fn-element (or (resolve-function (if value :dyadic :monadic)
 									  (insym fn-element))
 							(resolve-function :symbolic fn-element))))

@@ -41,3 +41,22 @@ enlist ← {                                  ⍝ List ⍺-leaves of nested arra
 foldl ← {                                   ⍝ Fold (reduce) from the left.
   ↑⍺⍺⍨/(⌽⍵),⊂⍺
 }
+
+⍝ From http://dfns.dyalog.com/n_nlines.htm
+
+nlines ← {                                  ⍝ Number of display lines for simple array.
+  {                       
+    (×/⍵)+{                                 ⍝ # of lines of real data +
+      +/+\0⌈⍵-1,¯1↓⍵                        ⍝ # of blank lines separating different planes
+    }×\¯1↓⍵                                 ⍝   of the array
+  }¯1↓⍴⍵                                    ⍝ last axis affects only width of display.
+}
+
+⍝ From http://dfns.dyalog.com/s_perv.htm
+
+perv ← {                                    ⍝ Scalar pervasion
+  ⍺←⊢                                       
+  $[1=≡⍺ ⍵ ⍵;⍺ ⍺⍺ ⍵;                        ⍝ (⍺ and) ⍵ depth 0: operand fn application
+    ⍺ ∇¨⍵                                   ⍝ (⍺ or) ⍵ deeper: recursive traversal.
+   ]
+}

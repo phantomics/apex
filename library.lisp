@@ -883,6 +883,8 @@
   "Generate a function applying a function at indices in an array specified by a given index or meeting certain conditions. Used to implement [@ at]."
   (lambda (omega &optional alpha)
     (declare (ignorable alpha))
+    (if (and left (not (functionp left)))
+    	(setq left-fn-d nil left-fn-m nil))
     (if (and (or left-fn-d left-fn-m)
 	     (or right-fn (or (vectorp right) (not (arrayp right)))))
 	(if (and (not right-fn)
