@@ -49,7 +49,7 @@ nlines ← {                                  ⍝ Number of display lines for si
   {                       
     (×/⍵)+{                                 ⍝ # of lines of real data +
       +/+\0⌈⍵-1,¯1↓⍵                        ⍝ # of blank lines separating different planes
-    }×\¯1↓⍵                                 ⍝   of the array
+    }×\¯1↓⍵                                 ⍝ of the array
   }¯1↓⍴⍵                                    ⍝ last axis affects only width of display.
 }
 
