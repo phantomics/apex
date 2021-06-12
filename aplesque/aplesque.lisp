@@ -576,6 +576,7 @@
 
 (defun catenate (a1 a2 axis)
   "Join two arrays along the specified axis."
+  ;; (print (list :c a1 a2))
   (let* ((rank1 (rank a1)) (rank2 (rank a2))
 	 (dims1 (dims a1)) (dims2 (dims a2))
 	 (max-rank (max rank1 rank2)) (uneven (/= rank1 rank2))
@@ -893,7 +894,7 @@
 	      (setf (row-major-aref output i) (disclose (copy-nested-array input)))))
 	output)
       (if (= 0 (length output-dims))
-          (row-major-aref input 0)
+          (enclose (row-major-aref input 0))
           (let* ((input-length (array-total-size input))
                  (output-length (reduce #'* output-dims))
                  (output (make-array output-dims :element-type (if populator t (element-type input)))))
@@ -1645,7 +1646,8 @@
   "Produce a vector from the elements of a multidimensional array."
   (if (and (not axes) (> 2 (rank input)))
       (if (= 1 (rank input))
-	  input (make-array 1 :initial-element input :element-type (assign-element-type input)))
+	  input (let ((input (disclose input)))
+		  (make-array 1 :initial-element input :element-type (assign-element-type input))))
       (if axes (let ((axis (first axes))
 		     (idims (dims input)))
 		 (cond ((and (numberp axis)

@@ -9,8 +9,8 @@
 
 (defvar *alphabet-vector* "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
-(defvar *idiom-native-symbols* '(⍺ ⍵ ⍺⍺ ⍵⍵ ∇ ∇∇ index-origin print-precision *digit-vector* *alphabet-vector*
-				 *apl-timestamp* to-output output-stream))
+(defvar *idiom-native-symbols* '(⍺ ⍵ ⍶ ⍹ ⍺⍺ ⍵⍵ ∇ ∇∇ index-origin print-precision *digit-vector*
+				 *alphabet-vector* *apl-timestamp* to-output output-stream))
 
 (let ((circular-functions ;; APL's set of circular functions called using the ○ symbol with a left argument
        (vector (lambda (x) (exp (complex 0 x)))
@@ -69,7 +69,7 @@
 	    :match-token-character
 	    (lambda (char)
 	      (or (alphanumericp char)
-		  (not (loop :for c :across "._⎕∆⍙∇¯⍺⍵⍬" :never (char= c char)))))
+		  (not (loop :for c :across "._⍺⍵⍶⍹⎕∆⍙∇¯⍬" :never (char= c char)))))
 	    ;; overloaded numeric characters may be functions or operators or may be part of a numeric token
 	    ;; depending on their context
 	    :match-overloaded-numeric-character (lambda (char) (char= #\. char))
@@ -418,6 +418,7 @@
 	    (is "3⍴3" #(3 3 3))
 	    (is "4 5⍴⍳3" #2A((1 2 3 1 2) (3 1 2 3 1) (2 3 1 2 3) (1 2 3 1 2)))
 	    (is "⍬⍴5 6 7" 5)
+	    (is "⍬⍴(4 5) 6" #0A#(4 5))
 	    (is "3⍴0⍴⊂2 2⍴5" #(#2A((0 0) (0 0)) #2A((0 0) (0 0)) #2A((0 0) (0 0))))))
   (⌷ (has :title "Index")
      (dyadic (λωαχ (at-index omega alpha axes index-origin)))
@@ -482,6 +483,7 @@
 		  (catenate-arrays index-origin))
       (tests (is ",5" #(5))
 	     (is ",3 4⍴⍳9" #(1 2 3 4 5 6 7 8 9 1 2 3))
+	     (is ",↓⍬,9" #(#(9)))
 	     (is ",[1]3 3⍴⍳9" #2A((1 2 3) (4 5 6) (7 8 9)))
 	     (is ",[⍬,1]3 3⍴⍳9" #2A((1 2 3) (4 5 6) (7 8 9)))
   	     (is ",[0.5]3 4⍴⍳9" #3A(((1 2 3 4) (5 6 7 8) (9 1 2 3))))
@@ -1293,13 +1295,8 @@
 	    (is "⌊1_000_000_000×2○⍣=1" 739085133)))
   (@ (has :title "At")
      (pivotal (with-derived-operands (right left right-fn-monadic left-fn-monadic left-fn-dyadic)
-		`(operate-at ,(if (or (member left '(⍺⍺ ⍵⍵))
-			      	      (not (or left-fn-dyadic left-fn-monadic)))
-			      	  left)
-			     ;; ⍺⍺ or ⍵⍵ may be passed in case they are values rather than functions
-			     ,(if (or (member right '(⍺⍺ ⍵⍵))
-				      (not right-fn-monadic))
-				  right)
+		`(operate-at ,(if (not (or left-fn-dyadic left-fn-monadic)) left)
+			     ,(if (not right-fn-monadic) right)
 			     ,left-fn-monadic ,left-fn-dyadic ,right-fn-monadic index-origin)))
      (tests (is "20 20@3 8⍳9" #(1 2 20 4 5 6 7 20 9))
 	    (is "(0@2 4)⍳9" #(1 0 3 0 5 6 7 8 9))
@@ -1574,13 +1571,11 @@
   (for "Operator composition of function within defined operator."
        "filter←{(⍺⍺¨⍵)/⍵} ⋄ {2|⍵} filter ⍳20" #(1 3 5 7 9 11 13 15 17 19))
   (for "Defined lateral operator with value passed as operand."
-       "3{⍺⍺+⍵}5" 8)
-  (for "Defined lateral operator with value passed as operand, argument positions reversed."
-       "2{⍵+⍺⍺}7" 9)
-  (for "Defined lateral operator with value passed as operand acting as catenating function."
-       "3{(1 2 ⍺⍺ 4 5)×⍵}9" #(9 18 27 36 45))
-  (for "As above without closure around catenating function."
-       "3{1 2 ⍺⍺ 4 5×⍵}9" #(1 2 3 36 45))
+       "(2{⍵+⍶}7),3{⍶+⍵}5" #(9 8))
+  (for "Defined lateral operator with value passed as operand positioned in vector."
+       "3{1 2 ⍶ 4 5×⍵}9" #(9 18 27 36 45))
+  (for "Compose operator composition within defined lateral operator."
+       "÷{⍺⍺∘⌽⍵}⍳9" #(1/9 1/8 1/7 1/6 1/5 1/4 1/3 1/2 1))
   (for "Array processing function applied over nested array."
        "{((5=¯1↑⍵)+1)⊃¯1 (⊂⍵)}¨(⊂1 5),⍨3⍴⊂⍳4" #(-1 -1 -1 #0A#(1 5)))
   (for "Indexed element of above array."

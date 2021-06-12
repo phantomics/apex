@@ -45,7 +45,7 @@
 	 (values this-item '(:type (:array :character))))
 	;; process symbol-referenced values
 	((and (symbolp this-item)
-	      (or (member this-item '(⍵ ⍺) :test #'eql)
+	      (or (member this-item '(⍵ ⍺ ⍹ ⍶) :test #'eql)
 		  (getf properties :symbol-overriding)
 		  (not (is-workspace-function this-item)))
 	      (or (not (is-workspace-operator this-item))
@@ -96,8 +96,14 @@
 					       (eq :axes (caar (last initial-expr))))
 					  (mapcar #'caar (cdar (last initial-expr)))))
 			  (assigned-symbols (get-assigned-symbols fn space))
-			  (arg-symbols (intersection '(⍺ ⍵ ⍺⍺ ⍵⍵ ∇∇) (getf (second this-item) :symbols)))
-			  (is-inline-operator (intersection arg-symbols '(⍺⍺ ⍵⍵ ∇∇))))
+			  (arg-symbols (intersection '(⍺ ⍵ ⍶ ⍹ ⍺⍺ ⍵⍵ ∇∇) (getf (second this-item) :symbols)))
+			  (is-inline-operator (intersection arg-symbols '(⍶ ⍹ ⍺⍺ ⍵⍵ ∇∇))))
+		     (if (= 2 (length (intersection arg-symbols '(⍶ ⍺⍺))))
+			 (error "A defined operator may not include both [⍶ left value] and~a"
+				" [⍺⍺ left function] operands."))
+		     (if (= 2 (length (intersection arg-symbols '(⍹ ⍵⍵))))
+			 (error "A defined operator may not include both [⍹ right value] and~⍺"
+				" [⍵⍵ right function] operands."))
 		     ;; if this is an inline operator, pass just that keyword back
 		     (if is-inline-operator :is-inline-operator
 			 (values (output-function
@@ -138,8 +144,7 @@
 		((eql this-item '∇)
 		 (values this-item (list :type '(:function :self-reference))))
 		((member this-item '(⍵⍵ ⍺⍺))
-		 (values (list 'ifn this-item)
-			 (list :type '(:function :operator-reference))))
+		 (values this-item (list :type '(:function :operator-reference))))
 		((member (intern (string-upcase this-item) *package-name-string*)
 			 (rest (assoc :function (idiom-symbols idiom))))
 		 (values (list 'function (getf (rest (assoc :function (idiom-symbols idiom)))
@@ -176,17 +181,25 @@
 		   (listp (first (last this-item))))
 	      (let* ((fn (first (last this-item)))
 		     (assigned-symbols (get-assigned-symbols fn space))
-		     (arg-symbols (intersection '(⍺ ⍵ ⍺⍺ ⍵⍵ ∇∇) (getf (second this-item) :symbols)))
-		     (is-inline (intersection arg-symbols '(⍺⍺ ⍵⍵)))
+		     (arg-symbols (intersection '(⍺ ⍵ ⍶ ⍹ ⍺⍺ ⍵⍵ ∇∇) (getf (second this-item) :symbols)))
+		     (is-inline (intersection arg-symbols '(⍶ ⍹ ⍺⍺ ⍵⍵)))
+		     (is-dyadic (member '⍺ arg-symbols))
 		     (is-pivotal (member '⍵⍵ arg-symbols))
 		     (valence (getf properties :valence)))
+		(if (= 2 (length (intersection arg-symbols '(⍶ ⍺⍺))))
+		    (error "A defined operator may not include both [⍶ left value] and~a"
+			   " [⍺⍺ left function] operands."))
+		(if (= 2 (length (intersection arg-symbols '(⍹ ⍵⍵))))
+		    (error "A defined operator may not include both [⍹ right value] and~⍺"
+			   " [⍵⍵ right function] operands."))
 		(if is-inline (if (or (not valence)
 				      (and is-pivotal (eq :pivotal valence))
 				      (and (not is-pivotal) (eq :lateral valence)))
 				  (values (output-function (mapcar process fn)
 							   nil assigned-symbols arg-symbols)
 					  (list :type (list :operator :closure
-							    (if is-pivotal :pivotal :lateral)))))
+							    (if is-pivotal :pivotal :lateral)
+							    (if is-dyadic :dyadic :monadic)))))
 		    (values nil nil)))
 	      (values nil nil)))
       (if (symbolp this-item)
@@ -226,12 +239,6 @@
     			 items rest-items))
 	       (if (and axes (not items))
 		   (error "Encountered axes with no function, operator or value to the left."))
-	       (if (and (member (first items) '(⍺⍺ ⍵⍵))
-			(not (member :operand-composition (getf (getf properties :special) :omit))))
-		   (setq value-elements (cons (first items) value-elements)
-			 value-props (cons '(:type (:array :operand-represented)) value-props)
-			 items (rest items)))
-
 	       (loop :while (not stopped)
 		  :do (or (if (and (listp item) (eq :axes (first item)))
 			      ;; if axes are encountered, process the axes and the preceding
@@ -501,6 +508,8 @@
 			 (fmakunbound (intern (string symbol) space)))
 		   (if (and (not (boundp (intern (string symbol) space)))
 			    (member :top-level (getf (first (last preceding-properties)) :special)))
+		       ;; only bind static variables in the workspace if the compiler is at the top level;
+		       ;; i.e. not within a { function }, where bound variables are static
 		       (progn (proclaim (list 'special (intern (string symbol) space)))
 			      (set (intern (string symbol) space) nil))))
 	      (cond ((eql 'to-output symbol)
@@ -734,15 +743,15 @@
 				     `(:special (:omit (:value-assignment :function-assignment :operation)
 						       ,@include-lexvar-symbols)))
 				    ;; try getting a value on the left, as for 3 +{⍺ ⍺⍺ ⍵} 4
-				    (assign-subprocessed
-				     left-value left-value-props
-				     '(:special (:omit (:value-assignment :function-assignment
-							:operation)))))))))
+				    (if (member :dyadic (getf operator-props :type))
+					(assign-subprocessed
+					 left-value left-value-props
+					 '(:special (:omit (:value-assignment :function-assignment
+							    :operation))))))))))
   (if operator
       ;; get left axes from the left operand and right axes from the precedent's properties so the
       ;; functions can be properly curried if they have axes specified
       (let ((left-operand (insym left-operand))
-	    ;; (left-operand-axes (first (getf (second properties) :axes)))
 	    (omega (gensym)) (alpha (gensym)))
 	;; single character values are passed within a (:char) form so they aren't interpreted as
 	;; functional glyphs by the (resolve-function) calls
@@ -750,20 +759,18 @@
 	    (setq left-operand (list :char left-operand)))
 	(values (if (and (listp operator) (member :lateral (getf operator-props :type)))
 		    `(apl-call :fn (apl-compose :op ,operator
-						,(if (listp left-operand)
-						     left-operand
-						     (if (characterp left-operand)
-							 `(lambda (,omega &optional ,alpha)
-							    (if ,alpha
-								(apl-call :fn ,(resolve-function
-										:dyadic left-operand)
-									  ,omega ,alpha)
-								(apl-call :fn ,(resolve-function
-										:monadic left-operand)
-									  ,omega)))
-							 left-operand)))
+						,(if (characterp left-operand)
+						     `(lambda (,omega &optional ,alpha)
+							(if ,alpha
+							    (apl-call :fn ,(resolve-function
+									    :dyadic left-operand)
+								      ,omega ,alpha)
+							    (apl-call :fn ,(resolve-function
+									    :monadic left-operand)
+								      ,omega)))
+						     left-operand))
 			       ,precedent ,@(if left-value (list left-value))))
-		'(:type (:function :operator-composed :lateral :inline)) items))))
+		'(:type (:array :evaluated)) items))))
 
 (composer-pattern pivotal-composition
     (operator operator-props left-operand-axes left-operand left-operand-props left-value
@@ -838,7 +845,7 @@
      (if (eq :array (first preceding-type))
 	 (progn (assign-subprocessed fn-element function-props
 				     `(:special (:omit (:function-assignment :value-assignment-by-selection
-									     :operand-composition
+									     :lateral-inline-composition
 									     :train-composition :operation)
 						       ,@include-lexvar-symbols)))
 		(setq is-function (eq :function (first (getf function-props :type)))
@@ -859,8 +866,7 @@
   (if is-function (let* ((fn-content (if (or (functionp fn-element)
 					     (member fn-element '(⍺⍺ ⍵⍵ ∇ ∇∇))
 					     (and (listp fn-element)
-						  (or (eql 'function (first fn-element))
-						      (eql 'ifn (first fn-element)))))
+						  (eql 'function (first fn-element))))
 					 fn-element (or (resolve-function (if value :dyadic :monadic)
 									  (insym fn-element))
 							(resolve-function :symbolic fn-element))))

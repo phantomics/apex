@@ -738,8 +738,8 @@
 			    (dotimes (i (size (if oscalar alpha omega))) ;; xdo
 			      (setf (row-major-aref output i)
 				    (funcall function-dyadic
-					     (disclose-unitary (or oscalar (row-major-aref omega i)))
-					     (disclose-unitary (or ascalar (row-major-aref alpha i)))))))
+					     (disclose (or oscalar (row-major-aref omega i)))
+					     (disclose (or ascalar (row-major-aref alpha i)))))))
 		  (if oscalar (setq output (funcall function-monadic oscalar))
 		      (dotimes (i (size omega)) ;; xdo
 			(setf (row-major-aref output i)
@@ -747,6 +747,7 @@
 	      (if (and oscalar ascalar (< 0 max-rank))
 		  (setq output (make-array (loop :for d :below max-rank :collect 1)
 					   :initial-element output)))
+	      ;; (print (list :oo output))
 	      output))))))
 
 (defun operate-grouping (function index-origin)

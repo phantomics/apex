@@ -24,9 +24,12 @@ alset ← {                                   ⍝ Assoc list ⍺ with (key value
   {(⊂val)@(⍺⍳⊂key)⊢⍵}\⍺                     ⍝ :: list ← list ∇ key value
 }
 
-⍝ acc ← {                                   ⍝ Accumulating reduction.
-⍝   ⊃⍺⍺{(⊂⍺ ⍺⍺⊃⍬⍴⍵),⍵}/1↓{⍵,⊂⍬⍴⍵}¯1⌽⍵
-⍝ }
+⍝ From http://dfns.dyalog.com/c_acc.htm
+
+acc ← {                                     ⍝ Accumulating reduction.
+  op←⍺⍺
+  ⊃op{(⊂⍺ op⊃⍬⍴⍵),⍵}/1↓{⍵,⊂⍬⍴⍵}¯1⌽⍵
+}
 
 ⍝ From http://dfns.dyalog.com/c_enlist.htm
 
@@ -38,9 +41,7 @@ enlist ← {                                  ⍝ List ⍺-leaves of nested arra
 
 ⍝ From http://dfns.dyalog.com/n_foldl.htm
 
-foldl ← {                                   ⍝ Fold (reduce) from the left.
-  ↑⍺⍺⍨/(⌽⍵),⊂⍺
-}
+foldl ← { ↑⍺⍺⍨/(⌽⍵),⊂⍺ }                    ⍝ Fold (reduce) from the left.
 
 ⍝ From http://dfns.dyalog.com/n_nlines.htm
 
@@ -55,8 +56,17 @@ nlines ← {                                  ⍝ Number of display lines for si
 ⍝ From http://dfns.dyalog.com/s_perv.htm
 
 perv ← {                                    ⍝ Scalar pervasion
-  ⍺←⊢                                       
-  $[1=≡⍺ ⍵ ⍵;⍺ ⍺⍺ ⍵;                        ⍝ (⍺ and) ⍵ depth 0: operand fn application
-    ⍺ ∇¨⍵                                   ⍝ (⍺ or) ⍵ deeper: recursive traversal.
-   ]
+  ⍺←⊢                                       ⍝ (⍺ and) ⍵ depth 0: operand fn application
+  $[1=≡⍺ ⍵ ⍵;⍺ ⍺⍺ ⍵;⍺ ∇¨⍵]                  ⍝ (⍺ or) ⍵ deeper: recursive traversal.
 }
+
+⍝ From http://dfns.dyalog.com/c_pmat.htm
+
+pmat ← {                                    ⍝ Permutation matrix of ⍳⍵.
+  {$[1≥⍴⍵;↑,↓⍵;↑⍪/⍵,∘∇¨⍵∘~¨⍵]}⍳⍵            ⍝ short vector: done, else items prefix sub-perms of remainder.
+}                                           ⍝ permutations of identity perm.
+
+⍝ From http://dfns.dyalog.com/c_pred.htm
+
+pred ← { ↑⍺⍺/¨(⍺/⍳⍴⍺)⊆⍵ }                   ⍝ Partitioned reduction.
+

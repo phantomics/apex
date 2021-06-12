@@ -24,6 +24,10 @@
 
 (defvar *demo-packages* '(april-demo.cnn april-demo.dfns.array april-demo.dfns.graph))
 
+(defvar ∇ nil)
+(defvar ∇∇ nil)
+;; set ∇ and ∇∇ to nil; this prevents errors when they are seen in operator compositions
+
 (defun make-threading-kernel-if-absent ()
   (if (not lparallel:*kernel*)
       (setq lparallel:*kernel* (setq *april-parallel-kernel*
@@ -84,15 +88,8 @@
 (defmacro insym (symbol)
   "Macro used in grammar.lisp to intern value-referencing symbols in appropriate workspace package."
   `(if (or (not (symbolp ,symbol))
-	   (member ,symbol '(⍵ ⍺ ⍵⍵ ⍺⍺))) ;; TODO: this is a hack for now, create a list of all reserved symbol names
+	   (member ,symbol *idiom-native-symbols*))
        ,symbol (intern (string ,symbol) space)))
-
-(defmacro ifn (symbol)
-  "Exposes either a function or a 'functionized' value. Used to handle ⍺⍺ and ⍵⍵ operands in user-defined operators."
-  (let ((o (gensym)) (a (gensym)))
-    `(if (functionp ,symbol)
-	 ,symbol (lambda (,o &optional ,a)
-		   (if ,a (catenate ,a (catenate (enclose ,symbol) ,o 0) 0))))))
 
 (defmacro alambda (params &body body)
   `(labels ((∇self ,params ,@body))
@@ -412,7 +409,7 @@
 	 ;; unless they're one element in which case the character is disclosed
 	 (if (= 3 (length element))
 	     (aref element 1) (subseq element 1 (1- (length element)))))
-	((member element '("⍺" "⍵" "∇" "⍺⍺" "⍵⍵" "∇∇") :test #'string=)
+	((member element '("⍺" "⍵" "⍶" "⍹" "⍺⍺" "⍵⍵" "∇" "∇∇") :test #'string=)
 	 ;; alpha and omega characters are directly changed to symbols in the April package
 	 (values (intern element idiom-name) t))
 	((numeric-string-p element)
@@ -777,7 +774,7 @@ It remains here as a standard against which to compare methods for composing APL
 					 (characterp (first form))
 					 (and (arrayp (first form))
 					      (= 0 (size (first form))))
-					 (member (first form) '(⍺ ⍵ ⍺⍺ ⍵⍵)
+					 (member (first form) '(⍺ ⍵ ⍶ ⍹ ⍺⍺ ⍵⍵)
 						 :test #'eql)
 					 (and (not (fboundp (first form)))
 					      (and (symbolp (first form))
@@ -802,15 +799,16 @@ It remains here as a standard against which to compare methods for composing APL
 						:test #'string=))
 			     :collect `((inws ,sym))))
 	(arguments (if arguments (mapcar (lambda (item) `(inws ,item)) arguments))))
-    (funcall (if (not (intersection arg-symbols '(⍺⍺ ⍵⍵)))
+    (funcall (if (not (intersection arg-symbols '(⍶ ⍹ ⍺⍺ ⍵⍵)))
 		 ;; the latter case wraps a user-defined operator
-		 #'identity (lambda (form) `(olambda (⍺⍺ &optional ⍵⍵)
-					      (declare (ignorable ⍺⍺ ⍵⍵))
-					      ;; (let ((⍺⍺ (if (functionp ⍺⍺)
-					      ;; 		    ⍺⍺ (lambda (o &optional a x)
-					      ;; 			 (if x ⍺⍺
-					      ;; 			     (if a (catenate a (catenate ⍺⍺ o))
-					      ;; 				 (catenate ⍺⍺ o)))))))
+		 #'identity (lambda (form) `(olambda (,(if (member '⍶ arg-symbols)
+							   '⍶ '⍺⍺)
+						       &optional ,(if (member '⍹ arg-symbols)
+								      '⍹ '⍵⍵))
+					      (declare (ignorable ,(if (member '⍶ arg-symbols)
+								       '⍶ '⍺⍺)
+								  ,(if (member '⍹ arg-symbols)
+								       '⍹ '⍵⍵)))
 					      ,form)))
 	     `(alambda ,(if arguments arguments `(⍵ &optional ⍺))
 		(declare (ignorable ,@(if arguments arguments '(⍵ ⍺))))

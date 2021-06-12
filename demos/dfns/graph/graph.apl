@@ -84,7 +84,7 @@ dfspan ← {                              ⍝ Depth-first spanning tree: graph �
   trav ← {                              ⍝ initial vertex and parent
     $[¯2≠⍺⊃⍵;⍵;                         ⍝ vertex visited: backtrack
       next←⌽⍺⊃graph                     ⍝ edges from vertex ⍺
-      tree←⍺⍺@⍺⊢⍵                       ⍝ ⍺⍺ is ⍺'s parent
+      tree←⍶@⍺⊢⍵                       ⍝ ⍺⍺ is ⍺'s parent
       ⊃⍺ ∇∇/next,⊂tree                  ⍝ visiting each edge in order
      ]
   }                                     ⍝ :: tree ← vtx (vtx ∇∇) tree
