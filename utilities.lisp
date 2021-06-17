@@ -1230,7 +1230,7 @@ It remains here as a standard against which to compare methods for composing APL
 							  ,(third item) :test #'equalp)))))))
 		      `((progn (setq prove:*enable-colors* nil)
 			       (plan ,test-count)
-			       ,@items
+			       ,@items (finalize)
 			       (setq prove:*enable-colors* t)
 			       (format t "~%~%")))))))))
 

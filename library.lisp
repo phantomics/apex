@@ -398,7 +398,6 @@
 (defun permute-array (index-origin)
   "Wraps (aops:permute) to permute an array, rearranging the axes in a given order or reversing them if no order is given. Used to implement monadic and dyadic [⍉ permute]."
   (lambda (omega &optional alpha)
-    ;; (print (list :om omega alpha))
     (if (not (arrayp omega))
 	omega (progn (if alpha (if (not (arrayp alpha))
 				   (setq alpha (- alpha index-origin))
@@ -725,30 +724,34 @@
 	     (odims (dims omega)) (adims (dims alpha))
 	     (orank (rank omega)) (arank (rank alpha))
 	     (max-rank (max orank arank)))
-	(if (not (or oscalar ascalar (not alpha)
-		     (and (= orank arank)
-			  (loop :for da :in adims :for do :in odims :always (= da do)))))
-	    (error "Mismatched left and right arguments to [¨ each].")
-	    (let* ((output-dims (dims (if oscalar alpha omega)))
-		   (output (if (not (and oscalar (or ascalar (not alpha))))
-			       (make-array output-dims))))
-	      (if alpha (if (and oscalar ascalar)
-			    (setq output (funcall function-dyadic (disclose-unitary omega)
-						  (disclose-unitary alpha)))
-			    (dotimes (i (size (if oscalar alpha omega))) ;; xdo
-			      (setf (row-major-aref output i)
-				    (funcall function-dyadic
-					     (disclose (or oscalar (row-major-aref omega i)))
-					     (disclose (or ascalar (row-major-aref alpha i)))))))
-		  (if oscalar (setq output (funcall function-monadic oscalar))
-		      (dotimes (i (size omega)) ;; xdo
-			(setf (row-major-aref output i)
-			      (funcall function-monadic (row-major-aref omega i))))))
-	      (if (and oscalar ascalar (< 0 max-rank))
-		  (setq output (make-array (loop :for d :below max-rank :collect 1)
-					   :initial-element output)))
-	      ;; (print (list :oo output))
-	      output))))))
+	(flet ((disclose-any (item)
+		 (if (not (arrayp item))
+		     item (row-major-aref item 0))))
+	  (if (not (or oscalar ascalar (not alpha)
+		       (and (= orank arank)
+			    (loop :for da :in adims :for do :in odims :always (= da do)))))
+	      (error "Mismatched left and right arguments to [¨ each].")
+	      (let* ((output-dims (dims (if oscalar alpha omega)))
+		     (output (if (not (and oscalar (or ascalar (not alpha))))
+				 (make-array output-dims))))
+		(if alpha (if (and oscalar ascalar)
+			      (setq output (funcall function-dyadic (disclose-any omega)
+						    (disclose-any alpha)))
+			      (dotimes (i (size (if oscalar alpha omega))) ;; xdo
+				(setf (row-major-aref output i)
+				      (funcall function-dyadic (if oscalar (disclose oscalar)
+								   (row-major-aref omega i))
+					       (if ascalar (disclose ascalar)
+						   (row-major-aref alpha i))))))
+		    ;; if 0-rank array is passed, disclose its content and enclose the result of the operation
+		    (if oscalar (setq output (enclose (funcall function-monadic (disclose-any oscalar))))
+			(dotimes (i (size omega)) ;; xdo
+			  (setf (row-major-aref output i)
+				(funcall function-monadic (row-major-aref omega i))))))
+		(if (and oscalar ascalar (< 0 max-rank))
+		    (setq output (make-array (loop :for d :below max-rank :collect 1)
+					     :initial-element output)))
+		output)))))))
 
 (defun operate-grouping (function index-origin)
   "Generate a function applying a function to items grouped by a criterion. Used to implement [⌸ key]."
@@ -936,8 +939,8 @@
 	      		      (if (= 1 (length true-vector))
 				  ;; if there is only one true element the to-assign value is
 				  ;; the value to be assigned, not a vector of values to assign
-				  to-assign (row-major-aref to-assign
-							    (1- (row-major-aref true-indices i)))))))
+				  (disclose to-assign)
+				  (row-major-aref to-assign (1- (row-major-aref true-indices i)))))))
 		  omega-copy))))
 	;; if the right argument is an array of rank > 1, assign the left operand values or apply the
 	;; left operand function as per choose or reach indexing

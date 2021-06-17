@@ -576,7 +576,6 @@
 
 (defun catenate (a1 a2 axis)
   "Join two arrays along the specified axis."
-  ;; (print (list :c a1 a2))
   (let* ((rank1 (rank a1)) (rank2 (rank a2))
 	 (dims1 (dims a1)) (dims2 (dims a2))
 	 (max-rank (max rank1 rank2)) (uneven (/= rank1 rank2))
@@ -713,7 +712,6 @@
 	       ;; in compress-mode: degrees must = length of axis,
 	       ;; zeroes are omitted from output, negatives add zeroes
 	       ;; otherwise: zeroes pass through, negatives add zeroes, degrees>0 must = length of axis
-	       ;; (print (list :c c-degrees section-size odiv-size idiv-size positive-indices))
 	       (if (is-unitary input)
 		   ;; if the input is a unitary value, just expand or replicate with that value
 		   (let ((value (if (not (arrayp input)) input (row-major-aref input 0))))
@@ -1630,7 +1628,6 @@
 	  (symbol-macrolet ((output-element (row-major-aref output o)))
 	    (dotimes (i (size (row-major-aref output o)))
 	      (let ((iindex 0) (remaining o) (odix 0))
-		;; (print (list :ee i))
 		(loop :for ofactor :across output-factors :for ix :from 0
 		   :do (multiple-value-bind (index remainder) (floor remaining ofactor)
 			 (if (= ix axis)

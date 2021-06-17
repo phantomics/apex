@@ -26,10 +26,7 @@ alset ← {                                   ⍝ Assoc list ⍺ with (key value
 
 ⍝ From http://dfns.dyalog.com/c_acc.htm
 
-acc ← {                                     ⍝ Accumulating reduction.
-  op←⍺⍺
-  ⊃op{(⊂⍺ op⊃⍬⍴⍵),⍵}/1↓{⍵,⊂⍬⍴⍵}¯1⌽⍵
-}
+acc ← { ⊃⍺⍺{(⊂⍺ ⍺⍺⊃⍬⍴⍵),⍵}/1↓{⍵,⊂⍬⍴⍵}¯1⌽⍵ } ⍝ Accumulating reduction.
 
 ⍝ From http://dfns.dyalog.com/c_enlist.htm
 
@@ -70,3 +67,45 @@ pmat ← {                                    ⍝ Permutation matrix of ⍳⍵.
 
 pred ← { ↑⍺⍺/¨(⍺/⍳⍴⍺)⊆⍵ }                   ⍝ Partitioned reduction.
 
+⍝ From http://dfns.dyalog.com/c_mscan.htm
+
+mscan ← {                                   ⍝ Minus scan.
+  ⍺←⍬⍴⌽⍳⍴⍴⍵                                 ⍝ ⍺ is axis (default last).
+  +\[⍺]⍵×[⍺](⍺⊃⍴⍵)⍴1,-1
+}
+
+⍝ From http://dfns.dyalog.com/c_dscan.htm
+
+dscan ← {                                   ⍝ Divide scan
+  ⍺←⍬⍴⌽⍳⍴⍴⍵                                 ⍝ ⍺ is axis (default last).
+  ×\[⍺]⍵*[⍺](⍺⊃⍴⍵)⍴1,-1
+}
+
+⍝ From http://dfns.dyalog.com/c_ascan.htm
+
+ascan ← {                                   ⍝ Associative scan.
+  $[2>0⊥⍴⍵;⍵;                               ⍝ few items: done.
+    ⌽↑⍺⍺{(⊂(⊃⍵)⍺⍺ ⍺),⍵}/⌽(⊂∘⊃¨↓⍵),↑1↓¨↓⍵
+   ]
+}
+
+⍝ From http://dfns.dyalog.com/c_ascana.htm
+
+ascana ← {                                  ⍝ Higher rank asscociative scan.
+  ⍺←⍬⍴⌽⍳⍴⍴⍵                                 ⍝ default last axis.
+  ↑[⍺-0.1](⍺⍺ ascan)¨↓[⍺]⍵
+}
+
+⍝ From http://dfns.dyalog.com/c_select.htm
+
+select ← { ⍺⊃¨↑,¨/⊂¨¨⍵ }                    ⍝ ⍺-selection of items of vector ⍵.
+
+⍝ From http://dfns.dyalog.com/c_shannon.htm
+
+shannon ← { -+/(2∘⍟×⊣)¨({≢⍵}⌸÷≢)⍵ }         ⍝ Shannon entropy of message ⍵.
+
+⍝ From http://dfns.dyalog.com/c_subvec.htm
+
+subvec ← {                                  ⍝ Is ⍺ a subvector of ⍵?
+  $[0∊⍴⍺;1;0∊⍴⍵;0;(1↓⍺)∇(⍵⍳1↑⍺)↓⍵]          ⍝ null ⍺: success, null ⍵: failure.
+}                                           ⍝ otherwise, check remaining items.

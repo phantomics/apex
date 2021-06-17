@@ -2,9 +2,7 @@
 
 ⍝ From http://dfns.dyalog.com/n_alists.htm
 
-gperm ← {                               ⍝ ⍵-permutation of vertices of graph ⍺.
-  (⊂⍵)⍳¨⍺[⍵]
-}
+gperm ← { (⊂⍵)⍳¨⍺[⍵] }                  ⍝ ⍵-permutation of vertices of graph ⍺.
 
 ⍝ From http://dfns.dyalog.com/n_insnode.htm
 
@@ -84,11 +82,25 @@ dfspan ← {                              ⍝ Depth-first spanning tree: graph �
   trav ← {                              ⍝ initial vertex and parent
     $[¯2≠⍺⊃⍵;⍵;                         ⍝ vertex visited: backtrack
       next←⌽⍺⊃graph                     ⍝ edges from vertex ⍺
-      tree←⍶@⍺⊢⍵                       ⍝ ⍺⍺ is ⍺'s parent
+      tree←⍶@⍺⊢⍵                        ⍝ ⍺⍺ is ⍺'s parent
       ⊃⍺ ∇∇/next,⊂tree                  ⍝ visiting each edge in order
      ]
   }                                     ⍝ :: tree ← vtx (vtx ∇∇) tree
   ⍵(¯1 trav)¯2⊣¨⍺                       ⍝ depth-first traversal of graph ⍵
+}
+
+⍝ From http://dfns.dyalog.com/c_stdists.htm
+
+stdists ← {                             ⍝ Spanning-tree path lengths.
+  tree←⍵                                ⍝ spanning tree
+  0{                                    ⍝ distance from root
+    next dvec←⍵                         ⍝ chldren and distance vector
+    $[next≡⍬;dvec;                      ⍝ no children: finished
+      ∆dvec←⍺@next⊢dvec                 ⍝ extended distance vector
+      ∆next←⍸tree∊next                  ⍝ grandchildren
+      (⍺+1)∇ ∆next ∆dvec                ⍝ examine rest of tree
+     ]
+  }(⍵⍳¯1)(⍵⊢¨¯1)                        ⍝ starting vertex and initial distances
 }
 
 ⍝ From http://dfns.dyalog.com/n_stpath.htm

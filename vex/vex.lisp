@@ -763,7 +763,6 @@
 			(each-axis-code (loop :for axis :in each-axis :collect
 					     (let ((output (process-lines axis)))
 					       (funcall symbol-collector (second output))
-					       ;;(print (list :out output))
 					       (first output)))))
 		   (cons :axes each-axis-code))))
 	     (handle-function (input-string)
@@ -843,7 +842,6 @@
 		     (%any (?blank-character))
 		     (=subseq (%any (?newline-character)))
 		     (=subseq (%any (?satisfies 'characterp))))
-	    ;; (print (list :sym symbols item special-precedent is-function-closure))
 	    (if (or symbols (member :symbols special-precedent))
 		(progn (setf (getf special-precedent :symbols)
 			     (append symbols (getf special-precedent :symbols)))

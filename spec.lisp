@@ -1117,6 +1117,8 @@
       (lateral (with-derived-operands (axes left-fn-monadic left-fn-dyadic)
 		 `(operate-each ,left-fn-monadic ,left-fn-dyadic)))
       (tests (is "⍳¨1 2 3" #(#(1) #(1 2) #(1 2 3)))
+	     (is "⊃¨↓⍳5" 1)
+	     (is "(1∘=)¨⍬,1" 1)
 	     (is "{⍵÷3}¨10" 10/3)
 	     (is "⍴⊢¨⊂1 2 3" #())
 	     (is "1 {⍺+⍵÷3}¨10" 13/3)
@@ -1147,7 +1149,8 @@
 						 #2A((9 18 27) (36 45 54) (63 72 81)))))
 	     (is "(1 1 1⍴⊂1 1 1)↓¨⊂3 3 3⍴⍳27" #3A(((#3A(((14 15) (17 18)) ((23 24) (26 27)))))))
 	     (is "(1 0 0) (1 1 0 1 0)⊂¨'abc' 'a|b|c'"
-		 #(#("abc") #("a" "|b" "|c")))))
+		 #(#("abc") #("a" "|b" "|c")))
+	     (is "~∘3¨@2⊢(2 3) (3) (2 4) (1 5) (3)" #(#(2 3) #() #(2 4) #(1 5) 3))))
   (⍨ (has :title "Commute")
      (lateral (with-derived-operands (axes left-fn-dyadic)
 		;; Generate a function applying a function to arguments in reverse order, or duplicating a single argument.
@@ -1406,7 +1409,7 @@
   (for "Scalar operation with axes on arrays of differing ranks."
        "1 2 3+[1]3 4⍴⍳9" #2A((2 3 4 5) (7 8 9 10) (12 4 5 6)))
   (for "As above on the second axis." "1 2 3 4+[2]3 4⍴⍳9" #2A((2 4 6 8) (6 8 10 12) (10 3 5 7)))
-  (for "Arithmetic with scalar and high-rank singleton array." "3+1 1 1 1⍴4" #4A((((7)))))
+  (for "Arithmetic with scalar and high-rank unitary array." "3+1 1 1 1⍴4" #4A((((7)))))
   (for "Boolean operation with vector of left arguments and enclosed vector on the right."
        "3 4=⊂3 4 5" #(#(1 0 0) #(0 1 0)))
   (for "Value assigned to a variable." "x←9" 9)
@@ -1518,7 +1521,9 @@
        "a←⍳5 ⋄ b←(3⊃a)←30 ⋄ a b" #(#(1 2 30 4 5) 30))
   (for "Print the result of a function applied to assignment." "⎕←⍴x←1 2 3 ⋄ x" #(1 2 3))
   (for "Assignment of dynamic variable within function."
-       "jje←3 ⋄ bob←{jje+←⍵ ⋄ jje} ⋄ bob 5" 8)
+       "aa←3 ⋄ bob←{aa+←⍵ ⋄ aa} ⋄ bob 5" 8)
+  (for "Creation of lexical variable and its reassignment within a lexically scoped function."
+       "{gg←1 ⋄ {gg←⍵}¨⍳⍵ ⋄ gg} 5" 5)
   (for "Index of variable with value assigned inside its own index."
        "y[⍋y←1 8 4 2]" #(1 2 4 8))
   (for "Inline pivotal operation-derived function expression."
@@ -1576,6 +1581,10 @@
        "3{1 2 ⍶ 4 5×⍵}9" #(9 18 27 36 45))
   (for "Compose operator composition within defined lateral operator."
        "÷{⍺⍺∘⌽⍵}⍳9" #(1/9 1/8 1/7 1/6 1/5 1/4 1/3 1/2 1))
+  (for "Lexically scoped function defined and used within defined lateral operator."
+       ",{op←⍺⍺ ⋄ ⊃op{(⊂⍺ op⊃⍬⍴⍵),⍵}/1↓{⍵,⊂⍬⍴⍵}¯1⌽⍵}⍳4" #(#(1 2 3 4) #(2 3 4) #(3 4) 4))
+  (for "As above with different left operand."
+       "+{op←⍺⍺ ⋄ ⊃op{(⊂⍺ op⊃⍬⍴⍵),⍵}/1↓{⍵,⊂⍬⍴⍵}¯1⌽⍵}⍳4" #(10 9 7 4))
   (for "Array processing function applied over nested array."
        "{((5=¯1↑⍵)+1)⊃¯1 (⊂⍵)}¨(⊂1 5),⍨3⍴⊂⍳4" #(-1 -1 -1 #0A#(1 5)))
   (for "Indexed element of above array."
@@ -2092,7 +2101,6 @@ fun 3")) 8))
 
 	  (is (print-and-run (april-c (with (:state :count-from 0)) "{⍳⍵}" 7))
 	      #(0 1 2 3 4 5 6) :test #'equalp))
-   
    )))
 
 (april-create-workspace common)
