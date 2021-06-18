@@ -285,8 +285,8 @@
 			    :inverse inverse :populator (build-populator metadata-symbol omega))))
       ;; if the resulting array is empty and the original array prototype was an array, set the
       ;; empty array prototype accordingly
-      (if (and (= 0 (size output))
-	       (not inverse) (arrayp (row-major-aref omega 0)))
+      (if (and (= 0 (size output)) (not inverse)
+	       (arrayp omega) (arrayp (row-major-aref omega 0)))
 	  (set-workspace-item-meta metadata-symbol output
 				   :eaprototype
 				   (make-prototype-of (funcall (if (= 0 (rank omega)) #'identity #'aref)
@@ -675,7 +675,7 @@
 	omega (if (= 0 (size omega))
 		  (or (and (= 1 (rank omega))
 			   (match-lexical-function-identity (aref function-glyph 0)))
-		      (make-array 0))
+		      (make-array (loop :for i below (1- (rank omega)) :collect 0)))
 		  (reduce-array omega function axis last-axis alpha)))))
 
 (defun operate-scanning (function axis &optional last-axis inverse)
@@ -726,17 +726,22 @@
 	     (max-rank (max orank arank)))
 	(flet ((disclose-any (item)
 		 (if (not (arrayp item))
-		     item (row-major-aref item 0))))
+		     item (row-major-aref item 0)))
+	       (this-enclose (item)
+		 (if (and (vectorp item)
+			  (= 1 (size item)))
+		     item (enclose item))))
 	  (if (not (or oscalar ascalar (not alpha)
 		       (and (= orank arank)
 			    (loop :for da :in adims :for do :in odims :always (= da do)))))
 	      (error "Mismatched left and right arguments to [¨ each].")
-	      (let* ((output-dims (dims (if oscalar alpha omega)))
-		     (output (if (not (and oscalar (or ascalar (not alpha))))
-				 (make-array output-dims))))
+	      (let* ((output-dims (dims (if oscalar ; (and oscalar (not ascalar))
+					    alpha omega)))
+		     (output (make-array output-dims)))
 		(if alpha (if (and oscalar ascalar)
-			      (setq output (funcall function-dyadic (disclose-any omega)
-						    (disclose-any alpha)))
+			      (setf (row-major-aref output 0)
+				    (funcall function-dyadic (disclose-any omega)
+					     (disclose-any alpha)))
 			      (dotimes (i (size (if oscalar alpha omega))) ;; xdo
 				(setf (row-major-aref output i)
 				      (funcall function-dyadic (if oscalar (disclose oscalar)
@@ -748,10 +753,7 @@
 			(dotimes (i (size omega)) ;; xdo
 			  (setf (row-major-aref output i)
 				(funcall function-monadic (row-major-aref omega i))))))
-		(if (and oscalar ascalar (< 0 max-rank))
-		    (setq output (make-array (loop :for d :below max-rank :collect 1)
-					     :initial-element output)))
-		output)))))))
+		(disclose-atom output))))))))
 
 (defun operate-grouping (function index-origin)
   "Generate a function applying a function to items grouped by a criterion. Used to implement [⌸ key]."
@@ -780,6 +782,11 @@
 							  :initial-contents (reverse items)))
 					    key))))
 	(mix-arrays 1 (apply #'vector item-sets))))))
+
+(defun operate-producing-inner (right left right-glyph)
+  (lambda (alpha omega)
+    (array-inner-product omega alpha right left
+			 (not (of-lexicon this-idiom :scalar-functions (aref right-glyph 0))))))
 
 (defun operate-composed (right right-fn-monadic right-fn-dyadic
 			 left left-fn-monadic left-fn-dyadic is-confirmed-monadic)

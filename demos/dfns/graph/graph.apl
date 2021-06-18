@@ -113,3 +113,21 @@ stpath ← {                              ⍝ Path through spanning tree ⍺ to 
      ]
   }⍵
 }
+
+⍝ From http://dfns.dyalog.com/c_stpaths.htm
+
+stpaths ← {                             ⍝ Spanning tree paths.
+  tree←⍵                                ⍝ spanning tree.
+  root←⍵⍳¯1                             ⍝ index of root vertex.
+  paths←(root=⍳⍴⍵)↑¨root                ⍝ initial path vector.
+
+  paths{                                ⍝ path to current vertices.
+    next←(⍵=⊂tree)/¨⊂⍳⍴tree             ⍝ vertices at next tree level.
+    $[(⊂⍬)∧.≡next;⍺;                    ⍝ all null: finished.
+      exts←(⊂¨⍵⊃¨⊂⍺),¨¨next             ⍝ paths to next tree level.
+      indx←↑,/next                      ⍝ accumulated indices.
+      paths←(↑,/exts)@indx⊢⍺            ⍝ set next level paths in paths vector.
+      paths ∇ indx                      ⍝ advance to next tree level.
+     ]
+  }root                                 ⍝ index of starting vertex.
+}

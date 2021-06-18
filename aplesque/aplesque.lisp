@@ -357,16 +357,19 @@
       (if (and finally (functionp finally)) (funcall finally))
       (values proceeding count))))
 
-(defun apply-scalar (function omega &optional alpha axes is-boolean)
+(defun apply-scalar (function omega &optional alpha axes is-boolean is-non-scalar-function)
   "Apply a scalar function over an array or arrays as appropriate for the shape of the argument(s)."
   (let* ((orank (rank omega)) (arank (rank alpha))
 	 (axes (if axes (enclose-atom axes)))
 	 (oscalar (if (is-unitary omega) (get-first-or-disclose omega)))
 	 (ascalar (if (is-unitary alpha) (get-first-or-disclose alpha)))
+	 (oempty (if (and oscalar (= 0 (size oscalar))) oscalar
+		     (if (= 0 (size omega)) omega)))
+	 (aempty (if (and ascalar (= 0 (size ascalar))) ascalar
+		     (if (= 0 (size alpha)) alpha)))
 	 (output-dims (dims (if axes (if (> arank orank) alpha omega)
 				(if oscalar alpha omega))))
-	 (output-type (if (or (not is-boolean)
-			      (not (= orank arank))
+	 (output-type (if (or (not is-boolean) (not (= orank arank))
 			      (not (and oscalar ascalar)))
 			  t 'bit))
 	 ;; for boolean arrays, check whether the output will directly hold the array contents
@@ -383,7 +386,8 @@
 	  ;; if the function is being applied monadically, map it over the array
 	  ;; or recurse if an array is found inside
 	  (if oscalar (setq output (promote-or-not (if (arrayp oscalar)
-						       (apply-scalar function oscalar alpha axes is-boolean)
+						       (apply-scalar function oscalar alpha
+								     axes is-boolean is-non-scalar-function)
 						       (funcall function oscalar))))
 	      (xdotimes output (i (size omega))
 		 (setf (row-major-aref output i) (nest (apply-scalar function (row-major-aref omega i))))))
@@ -391,36 +395,39 @@
 	      ;; if both arguments are scalar or 1-element, return the output of the function on both,
 	      ;; remembering to promote the output to the highest rank of the input, either 0 or 1 if not scalar
 	      (setq output (promote-or-not (if (or (arrayp oscalar) (arrayp ascalar))
-					       (apply-scalar function oscalar ascalar axes is-boolean)
+					       (apply-scalar function oscalar ascalar
+							     axes is-boolean is-non-scalar-function)
 					       (funcall function oscalar ascalar))))
-	      (if (or oscalar ascalar
-		      (and (= orank arank)
-			   (loop :for da :in (dims alpha) :for do :in (dims omega) :always (= da do))))
-		  ;; map the function over identically-shaped arrays
-		  (xdotimes output (i (size (if oscalar alpha omega)))
-		    (setf (row-major-aref output i)
-			  (apply-scalar function (or oscalar (disclose (row-major-aref omega i)))
-					(or ascalar (disclose (row-major-aref alpha i))))))
-		  ;; if axes are given, go across the higher-ranked function and call the function on its
-		  ;; elements along with the appropriate elements of the lower-ranked function
-		  (if axes (destructuring-bind (lowrank highrank &optional omega-lower)
-			       (if (> orank arank) (list alpha omega) (list omega alpha t))
-			     (if (loop :for a :across axes :for ax :from 0
- 				    :always (and (< a (rank highrank))
-						 (= (nth a (dims highrank)) (nth ax (dims lowrank)))))
-				 (let ((lrc (loop :for i :below (rank lowrank) :collect 0)))
-				   (across highrank (lambda (elem coords)
-						      (loop :for a :across axes :for ax :from 0
-							 :do (setf (nth ax lrc) (nth a coords)))
-						      (setf (apply #'aref output coords)
-							    (nest (if omega-lower
-								      (funcall function elem
-									       (apply #'aref lowrank lrc))
-								      (funcall function
-									       (apply #'aref lowrank lrc)
-									       elem)))))))
-				 (error "Incompatible dimensions or axes.")))
-		      (error "Mismatched array sizes for scalar operation.")))))
+	      (if (and is-non-scalar-function (or oempty aempty))
+		  (setq output (funcall function (disclose omega) (disclose alpha)))
+		  (if (or oscalar ascalar
+			  (and (= orank arank)
+			       (loop :for da :in (dims alpha) :for do :in (dims omega) :always (= da do))))
+		      ;; map the function over identically-shaped arrays
+		      (dotimes (i (size output))
+			(setf (row-major-aref output i)
+			      (apply-scalar function (or oscalar (disclose (row-major-aref omega i)))
+					    (or ascalar (disclose (row-major-aref alpha i))))))
+		      ;; if axes are given, go across the higher-ranked function and call the function on its
+		      ;; elements along with the appropriate elements of the lower-ranked function
+		      (if axes (destructuring-bind (lowrank highrank &optional omega-lower)
+				   (if (> orank arank) (list alpha omega) (list omega alpha t))
+				 (if (loop :for a :across axes :for ax :from 0
+ 					:always (and (< a (rank highrank))
+						     (= (nth a (dims highrank)) (nth ax (dims lowrank)))))
+				     (let ((lrc (loop :for i :below (rank lowrank) :collect 0)))
+				       (across highrank (lambda (elem coords)
+							  (loop :for a :across axes :for ax :from 0
+							     :do (setf (nth ax lrc) (nth a coords)))
+							  (setf (apply #'aref output coords)
+								(nest (if omega-lower
+									  (funcall function elem
+										   (apply #'aref lowrank lrc))
+									  (funcall function
+										   (apply #'aref lowrank lrc)
+										   elem)))))))
+				     (error "Incompatible dimensions or axes.")))
+			  (error "Mismatched array sizes for scalar operation."))))))
       output)))
 
 (defun array-compare (item1 item2)
@@ -860,26 +867,26 @@
 
 (defun enlist (input)
   "Create a vector containing all elements of the input array in ravel order, breaking down nested and multidimensional arrays."
-  (if (or (not (arrayp input))
-	  (= 1 (array-total-size input)))
-      input (let ((index 0))
-	      (labels ((measure-array (in)
-			 (let ((length 0))
-			   (dotimes (i (size in))
-			     (incf length (if (not (arrayp (row-major-aref in i)))
-					      1 (measure-array (row-major-aref in i)))))
-			   length))
-		       ;; TODO: parallelize?
-		       (copy-contents (in destination)
-			 (dotimes (i (size in))
-			   (if (arrayp (row-major-aref in i))
-			       (copy-contents (row-major-aref in i) destination)
-			       (progn (setf (row-major-aref destination index)
-					    (row-major-aref in i))
-				      (incf index))))))
-		(let ((output (make-array (measure-array input) :element-type (element-type input))))
-		  (copy-contents input output)
-		  output)))))
+  (if (not (arrayp input))
+      (vector input)
+      (let ((index 0))
+	(labels ((measure-array (in)
+		   (let ((length 0))
+		     (dotimes (i (size in))
+		       (incf length (if (not (arrayp (row-major-aref in i)))
+					1 (measure-array (row-major-aref in i)))))
+		     length))
+		 ;; TODO: parallelize?
+		 (copy-contents (in destination)
+		   (dotimes (i (size in))
+		     (if (arrayp (row-major-aref in i))
+			 (copy-contents (row-major-aref in i) destination)
+			 (progn (setf (row-major-aref destination index)
+				      (row-major-aref in i))
+				(incf index))))))
+	  (let ((output (make-array (measure-array input) :element-type (element-type input))))
+	    (copy-contents input output)
+	    output)))))
 
 (defun reshape-to-fit (input output-dims &key (populator))
   "Reshape an array into a given set of dimensions, truncating or repeating the elements in the array until the dimensions are satisfied if the new array's size is different from the old."
@@ -1012,38 +1019,36 @@
 (defun reduce-array (input function axis &optional last-axis window)
   "Reduce an array along by a given function along a given dimension, optionally with a window interval."
   (if (= 0 (rank input))
-      (make-array nil :initial-element (funcall function (aref input)
-						(aref input)))
-      (let* ((odims (dims input))
-	     (axis (or axis (if (not last-axis) 0 (max 0 (1- (rank input))))))
-	     (rlen (nth axis odims))
-	     (increment (reduce #'* (nthcdr (1+ axis) odims)))
-	     (wsegment)
-	     (output (make-array (loop :for dim :in odims :for dx :from 0
-				    :when (/= dx axis) :collect dim
-				    :when (and window (= dx axis))
-				    :collect (setq wsegment (- dim (1- window)))))))
-	(xdotimes output (i (size output))
-	  (declare (optimize (safety 1)))
-	  (let ((value))
-	    (loop :for ix :from (1- (or window rlen)) :downto 0
-	       :do (let ((item (row-major-aref
-				input (+ (* ix increment)
-					 (if window (* rlen (floor i wsegment))
-					     (if (= 1 increment)
-						 0 (* (floor i increment)
-						      (- (* increment rlen) increment))))
-					 (if (/= 1 increment) i
-					     (if window (if (>= 1 (rank input))
-							    i (mod i wsegment))
-						 (* i rlen)))))))
-		     (setq value (if (not value) item (funcall function value item)))))
-	    (setf (row-major-aref output i) value)))
-	(if (not (and (= 0 (rank output))
-		      (= 0 (rank (aref output)))))
-	    output (disclose output)))))
+      input (let* ((odims (dims input))
+		   (axis (or axis (if (not last-axis) 0 (max 0 (1- (rank input))))))
+		   (rlen (nth axis odims))
+		   (increment (reduce #'* (nthcdr (1+ axis) odims)))
+		   (wsegment)
+		   (output (make-array (loop :for dim :in odims :for dx :from 0
+					  :when (/= dx axis) :collect dim
+					  :when (and window (= dx axis))
+					  :collect (setq wsegment (- dim (1- window)))))))
+	      (xdotimes output (i (size output))
+		(declare (optimize (safety 1)))
+		(let ((value))
+		  (loop :for ix :from (1- (or window rlen)) :downto 0
+		     :do (let ((item (row-major-aref
+				      input (+ (* ix increment)
+					       (if window (* rlen (floor i wsegment))
+						   (if (= 1 increment)
+						       0 (* (floor i increment)
+							    (- (* increment rlen) increment))))
+					       (if (/= 1 increment) i
+						   (if window (if (>= 1 (rank input))
+								  i (mod i wsegment))
+						       (* i rlen)))))))
+			   (setq value (if (not value) item (funcall function value item)))))
+		  (setf (row-major-aref output i) value)))
+	      (if (not (and (= 0 (rank output))
+			    (= 0 (rank (aref output)))))
+		  output (disclose output)))))
 
-(defun array-inner-product (alpha omega function1 function2)
+(defun array-inner-product (alpha omega function1 function2 &optional function1-nonscalar)
   "Find the inner product of two arrays with two functions."
   (let* ((adims (dims alpha)) (odims (dims omega)) (arank (rank alpha)) (orank (rank omega))
 	 (asegment (first (last adims)))
@@ -1064,7 +1069,8 @@
 	    (dotimes (i osegment) (setf (aref oholder i) (row-major-aref omega (+ ovix (* i ovectors))))))
 	(setf (row-major-aref output x)
 	      (if (= 0 arank orank) (funcall function1 omega alpha)
-		  (reduce-array (apply-scalar function1 (or oholder omega) (or adisp alpha))
+		  (reduce-array (apply-scalar function1 (or oholder omega) (or adisp alpha)
+					      nil nil function1-nonscalar)
 				function2 0)))))
     (if (not (and (= 0 (rank output))
 		  (= 0 (rank (aref output)))))
@@ -2223,7 +2229,7 @@
 										  (* current dim))))))
 					     ;; find the total number of empty lines preceding this row by
 					     ;; encoding the coordinates excepting the last two with a series
-					     ;; of number bases found by multiplying each dimension going
+				     ;; of number bases found by multiplying each dimension going
 					     ;; backwards excepting the last 2 by the previous base and adding 1
 					     empty-rows
 					     (reduce
