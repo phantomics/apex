@@ -20,7 +20,7 @@ But no longer. Lisp is the great connector of the software world, digesting and 
 
 ### Discussion
 
-For the time being, discussion of April and its development is happening on the `##phantomics` channel on irc.freenode.net.
+For the time being, discussion of April and its development is happening on the `##phantomics` channel on irc.libera.chat.
 
 ## Automatic Installation
 
@@ -874,6 +874,9 @@ And you can see a demonstration of April language features by entering:
 ```lisp
 * (april (demo))
 ```
+
+April comes with a set of demo packages implementing useful APL functions. The demo packages are located in this repository's `/demos` folder, and each package has its own set of tests. You can load the demos by evaluating `(load-demos)` and run the tests for each demo by evaluating `(run-demo-tests)`.
+
 
 ## Enabling APL Input in Emacs
 

@@ -9,7 +9,7 @@
 (specify-demo
  "April array demo"
  (with :space array-demo-space
-       :description "Implements graph processing functions from Dyalog's dfns.")
+       :description "Implements array processing functions from Dyalog's dfns.")
  (:tests (provision "found ← ('milly' 'molly' 'may') ('star' 'thing' 'stone')")
 	 (is "found alget 'may'" "stone")
 	 (is "found alpop 'molly'" #("thing" #(#("milly" "may") #("star" "stone"))))

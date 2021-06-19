@@ -67,17 +67,17 @@
 			     (funcall (formatter "𝕊~W") s (second list)) 
 			     (pprint-fill s list))))
 
-(let ((demos-loaded))
-  (defun load-demos ()
-    (loop :for package-symbol :in *demo-packages* :do (asdf:load-system package-symbol))
-    (setq demos-loaded t))
-  
-  (defun run-demo-tests ()
-    (if demos-loaded (loop :for package-symbol :in *demo-packages* :do
-			  (let ((run-function-symbol (intern "RUN-TESTS" (string-upcase package-symbol))))
-			    (if (fboundp run-function-symbol)
-				(funcall (symbol-function run-function-symbol)))))
-	"Demo packages not loaded; cannot run demo tests. Load the demo packages with (load-demos) first.")))
+(defun load-demos ()
+  (loop :for package-symbol :in *demo-packages* :do (asdf:load-system package-symbol)))
+
+(defun run-demo-tests ()
+  (loop :for package-symbol :in *demo-packages*
+     :do (if (asdf:registered-system package-symbol)
+	     (let ((run-function-symbol (intern "RUN-TESTS" (string-upcase package-symbol))))
+	       (if (fboundp run-function-symbol)
+		   (funcall (symbol-function run-function-symbol))))
+	     (format t "~% Warning: demo system ｢~a｣ not loaded. Did you evaluate (load-demos) before trying to run the demo tests?~%"
+		     package-symbol))))
 
 (defun disclose-atom (item)
   "If the argument is a non-nested array with only one member, disclose it, otherwise do nothing."
