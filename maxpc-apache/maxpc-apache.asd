@@ -30,4 +30,4 @@
                       :depends-on ("packages" "primitives" "more"))
                (:file "digit"
                       :depends-on ("packages" "primitives" "more")))
-  :in-order-to (#+asdf3 (test-op (test-op :maxpc-test))))
+  :in-order-to (#+asdf3 (test-op (test-op :maxpc-apache-test))))

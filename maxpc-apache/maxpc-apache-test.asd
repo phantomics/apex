@@ -6,7 +6,7 @@
   :description
   "Test and benchmark suite for MaxPC."
   :author "Max Rottenkolber <max@mr.gy>"
-  :license "GNU Affero General Public License"
+  :license "Apache-2.0"
   :components ((:file "test")
                (:file "bench")
                (:file "example-sexp"))

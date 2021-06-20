@@ -36,7 +36,7 @@
 
 (let ((this-package (package-name *package*)))
   (defmacro in-april-workspace (name &body body)
-    "Reader macro that interns symbols in the current workspace; works in tandem with 𝕊 reader macro."
+    "Macro that interns symbols in the current workspace; works in tandem with 𝕊 reader macro."
     (let ((space-name (concatenate 'string "APRIL-WORKSPACE-" (string-upcase name))))
       (labels ((replace-symbols (form)
 		 (loop :for item :in form :for ix :from 0
@@ -61,10 +61,10 @@
 			   (list 'inws (read stream t nil t))))
 
 ;; printer extension to use the 𝕊 reader macro
-(set-pprint-dispatch '(cons (member inws)) 
+(set-pprint-dispatch '(cons (member inws))
 		     #'(lambda (s list)
 			 (if (and (symbolp (second list)) (not (third list)))
-			     (funcall (formatter "𝕊~W") s (second list)) 
+			     (funcall (formatter "𝕊~W") s (second list))
 			     (pprint-fill s list))))
 
 (defun load-demos ()
