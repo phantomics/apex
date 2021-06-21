@@ -1060,17 +1060,18 @@ It remains here as a standard against which to compare methods for composing APL
     ((list (guard first (member first '(λω λωα))) second)
      ;; invert a λω or λωα macro lambda expression
      (list first (invert-function second)))
-    ((list* 'alambda args (guard declare-form (and (listp declare-form) (eql 'declare (first declare-form))))
+    ((list* 'alambda args options
+	    (guard declare-form (and (listp declare-form) (eql 'declare (first declare-form))))
 	    first-form rest-forms)
      ;; invert an arbitrary lambda
      (if rest-forms `(lambda ,args ,declare-form
 			     (error "This function has more than one statement and thus cannot be inverted."))
-	 `(alambda ,args ,declare-form ,(invert-function first-form))))
-    ((list* 'alambda args first-form rest-forms)
+	 `(alambda ,args ,options ,declare-form ,(invert-function first-form))))
+    ((list* 'alambda args options first-form rest-forms)
      ;; invert an arbitrary lambda
      (if rest-forms `(lambda ,args (declare (ignore ⍵ ⍺))
     			     (error "This function has more than one statement and thus cannot be inverted."))
-	 `(alambda ,args ,(invert-function first-form))))
+	 `(alambda ,args ,options ,(invert-function first-form))))
     ((list* 'apl-call function-symbol function-form arg1 arg2-rest)
      (destructuring-bind (&optional arg2 &rest rest) arg2-rest
        ;; invert an apl-call expression - WIP
