@@ -12,6 +12,9 @@
 (defvar *idiom-native-symbols* '(⍺ ⍵ ⍶ ⍹ ⍺⍺ ⍵⍵ ∇ ∇∇ index-origin print-precision *digit-vector*
 				 *alphabet-vector* *apl-timestamp* to-output output-stream))
 
+(defvar *system-variables* '(:index-origin *index-origin* :print-precision *print-precision*
+			     :comparison-tolerance *comparison-tolerance*))
+
 (let ((circular-functions ;; APL's set of circular functions called using the ○ symbol with a left argument
        (vector (lambda (x) (exp (complex 0 x)))
 	       (lambda (x) (complex 0 x))
@@ -132,12 +135,9 @@
 				  (if (getf state :print-to)
 				      (getf state :print-to)
 				      (second (getf state :output-stream)))))
-		      (list (list 'index-origin (or (getf state :index-origin)
-						    `(inws *index-origin*)))
-			    (list 'print-precision (or (getf state :print-precision)
-						       `(inws *print-precision*)))
-			    (list 'comparison-tolerance (or (getf state :comparison-tolerance)
-							    `(inws *comparison-tolerance*))))))
+		      (loop :for (key value) :on *system-variables* :by #'cddr
+			 :collect (list (intern (string-upcase key))
+					(or (getf state key) `(inws ,value))))))
 	    :lexer-postprocess
 	    (lambda (tokens idiom space)
 	      ;; currently, this function is used to initialize function and variable references

@@ -95,6 +95,17 @@
   `(labels ((∇self ,params ,@body))
      #'∇self))
 
+(defmacro alambda (params options &body body)
+  (let* ((options (rest options))
+	 (system-vars (rest (assoc :sys-vars options))))
+    `(labels ((∇self ,params
+		(declare (ignorable ,@(loop :for var :in params :when (not (eql '&optional var))
+					 :collect var)))
+		(let ,(loop :for var :in system-vars :collect (list var var))
+		  (declare (ignorable ,@system-vars))
+		  ,@body)))
+       #'∇self)))
+
 (defmacro olambda (params &body body)
   `(labels ((∇oself ,params ,@body))
      #'∇oself))
@@ -811,7 +822,8 @@ It remains here as a standard against which to compare methods for composing APL
 								       '⍹ '⍵⍵)))
 					      ,form)))
 	     `(alambda ,(if arguments arguments `(⍵ &optional ⍺))
-		(declare (ignorable ,@(if arguments arguments '(⍵ ⍺))))
+		  (with (:sys-vars ,@(loop :for (key value) :on *system-variables* :by #'cddr
+					:collect `(inws ,value))))
 		,@(if (not assigned-symbols)
 		      form `((let ,assigned-symbols ,@form)))))))
 
