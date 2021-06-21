@@ -594,7 +594,9 @@
 			   ;; will correctly intern it, unless it's one of the system variables
 			   `(apl-assign ,(if (not (and (listp symbols)
 						       (not (eql 'inws (first symbols)))))
-					     symbols (cons 'avector symbols))
+					     symbols (if (= 1 (length symbols))
+							 (first symbols)
+							 (cons 'avector symbols)))
 					,precedent)))))
        '(:type (:array :assigned))
        items)))

@@ -91,10 +91,6 @@
 	   (member ,symbol *idiom-native-symbols*))
        ,symbol (intern (string ,symbol) space)))
 
-(defmacro alambda (params &body body)
-  `(labels ((∇self ,params ,@body))
-     #'∇self))
-
 (defmacro alambda (params options &body body)
   (let* ((options (rest options))
 	 (system-vars (rest (assoc :sys-vars options))))
@@ -229,8 +225,11 @@
 				 (and (listp value)
 				      (eql 'inws (first value)))))
 			value `(duplicate ,value))))
+	;; handle assignment of ⍺ or ⍵; ⍺-assignment sets its default value if no right argument is
+	;; present; ⍵-assignment is an error. This is handled below for strand assignments.
 	(if (eql '⍺ symbol) `(or ⍺ (setf ⍺ ,set-to))
-	    `(setf ,symbol ,set-to)))
+	    (if (eql '⍵ symbol) `(error "The [⍵ right argument] cannot have a default assignment.")
+		`(setf ,symbol ,set-to))))
       (let ((assign-forms) (values (gensym "A"))
 	    (symbols (if (not (eql 'avector (first symbol)))
 			 symbol (rest symbol))))
@@ -244,7 +243,10 @@
 				(let ((set-to `(disclose (if (or (not (arrayp ,values)) (= 1 (size ,values)))
 							     ,values ,(build-aref values (reverse path-to))))))
 				  (setf assign-forms (cons (if (eql '⍺ sym) `(or ⍺ (setf ⍺ ,set-to))
-							       `(setf ,sym ,set-to))
+							       (if (eql '⍵ sym)
+								   `(error "The [⍵ right argument] cannot ~a"
+									   "have a default assignment.")
+								   `(setf ,sym ,set-to)))
 							   assign-forms))))))))
 	  (process-symbols symbols)
 	  `(let ((,values ,value))
