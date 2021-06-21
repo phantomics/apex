@@ -136,7 +136,7 @@
 				      (getf state :print-to)
 				      (second (getf state :output-stream)))))
 		      (loop :for (key value) :on *system-variables* :by #'cddr
-			 :collect (list (intern (string-upcase key))
+			 :collect (list (intern (string-upcase key) *package-name-string*)
 					(or (getf state key) `(inws ,value))))))
 	    :lexer-postprocess
 	    (lambda (tokens idiom space)
@@ -1529,8 +1529,8 @@
   (for "Print the result of a function applied to assignment." "⎕←⍴x←1 2 3 ⋄ x" #(1 2 3))
   (for "Assignment of dynamic variable within function."
        "aa←3 ⋄ bob←{aa+←⍵ ⋄ aa} ⋄ bob 5" 8)
-  (for "Creation of lexical variable and its reassignment within a lexically scoped function."
-       "{gg←1 ⋄ {gg←⍵}¨⍳⍵ ⋄ gg} 5" 5)
+  (for "Creation of lexical variable unchanged by reassignment within a sub-function's scope."
+       "{gg←1 ⋄ {gg←⍵}¨⍳⍵ ⋄ gg} 5" 1)
   (for "Index of variable with value assigned inside its own index."
        "y[⍋y←1 8 4 2]" #(1 2 4 8))
   (for "Inline pivotal operation-derived function expression."

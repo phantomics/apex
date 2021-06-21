@@ -120,9 +120,11 @@
 						      :fn-assigned-symbols (getf (getf properties :special)
 										 :fn-assigned-symbols))))
 			       (to-hoist (loop :for symbol :in assigned-symbols
-					    :when (not (member symbol (getf (getf properties :special)
-									    :lexvar-symbols)))
-					      :collect symbol)))
+					    ;; this clause prevents nested functions from aliasing
+					    ;; variables from the parent function(s)
+					    ;; :when (not (member symbol (getf (getf properties :special)
+					    ;; 				    :lexvar-symbols)))
+					    :collect symbol)))
 			   ;; TODO: fn-assigned-symbols should not be nil but should send the properties
 			   ;; to the next level down!
 			   (values (output-function (mapcar (lambda (f) (funcall process f sub-props))
