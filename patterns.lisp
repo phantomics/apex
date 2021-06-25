@@ -15,12 +15,13 @@
 		'(:type (:function :implicit :sum-until-pattern))))
       (values nil nil tokens)))
 
-(composer-pattern get-last-pattern (comma comma-props rotate rotate-props disclose disclose-props)
+(composer-pattern get-last-pattern (comma comma-props rotate rotate-props disclose disclose-props value)
     ((assign-element comma comma-props process-function '(:glyph \,))
      (assign-element rotate rotate-props process-function '(:glyph ⌽))
      (if (not rotate) (assign-element rotate rotate-props process-function '(:glyph ⊖)))
-     (assign-element disclose disclose-props process-function '(:glyph ⊃)))
-  (if (and comma rotate disclose)
+     (assign-element disclose disclose-props process-function '(:glyph ⊃))
+     (assign-element value value-props process-value)) ;; doesn't work if a left arg is present
+  (if (and comma rotate disclose (not value))
       (let ((input (gensym)))
 	(values `(lambda (,input)
 		   (if (not (arrayp ,input))
@@ -28,10 +29,11 @@
 		'(:type (:function :implicit :get-last-pattern))))
       (values nil nil tokens)))
 
-(composer-pattern rank-pattern (shape1 shape1-props shape2 shape2-props)
+(composer-pattern rank-pattern (shape1 shape1-props shape2 shape2-props value)
     ((assign-element shape1 shape1-props process-function '(:glyph ⍴))
-     (assign-element shape2 shape2-props process-function '(:glyph ⍴)))
-  (if (and shape1 shape2)
+     (assign-element shape2 shape2-props process-function '(:glyph ⍴))
+     (assign-element value value-props process-value)) ;; doesn't work if a left arg is present
+  (if (and shape1 shape2 (not value))
       (let ((input (gensym)))
 	(values `(lambda (,input) (vector (rank ,input)))
 		'(:type (:function :implicit :rank-pattern))))

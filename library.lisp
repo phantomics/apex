@@ -48,6 +48,52 @@
       (make-array (list (length included)) :element-type (element-type alpha)
 		  :initial-contents (reverse included)))))
 
+(defun complex-floor (number)
+  "Find the floor of a complex number using Eugene McDonnell's algorithm."
+  (let* ((r (realpart number))
+	 (i (imagpart number))
+	 (b (+ (floor r) (* #C(0 1) (floor i))))
+	 (x (mod r 1))
+	 (y (mod i 1)))
+    (+ b (if (> 1 (+ x y))
+	     0 (if (>= x y) 1 #C(0 1))))))
+
+(defun apl-floor (omega)
+  "Find a number's floor using the complex floor algorithm if needed."
+  (if (complexp omega) (complex-floor omega)
+      (floor omega)))
+
+(defun apl-ceiling (omega)
+  "Find a number's ceiling deriving from the complex floor algorithm if needed."
+  (if (complexp omega) (- (complex-floor (- omega)))
+      (ceiling omega)))
+
+(defun apl-divide (method)
+  "Generate a division function according to the [⎕DIV division method] in use."
+  (lambda (omega &optional alpha)
+    (if (and alpha (= 0 omega) (= 0 alpha))
+	(if (= 0 method) 1 0)
+	(if alpha (/ alpha omega)
+	    (if (and (< 0 method) (= 0 omega))
+		0 (/ omega))))))
+
+(defun apl-xcy (function)
+  "Return a function to find the greatest common denominator or least common multiple of fractional as well as whole numbers. If one or both arguments are floats, the result is coerced to a double float."
+  (lambda (omega alpha)
+    (if (and (integerp omega) (integerp alpha))
+	(funcall function omega alpha)
+	(let* ((float-input)
+	       (omega (if (not (floatp omega))
+			  omega (setf float-input (rationalize omega))))
+	       (alpha (if (not (floatp alpha))
+			  alpha (setf float-input (rationalize alpha)))))
+	  (funcall (if (not float-input) #'identity (lambda (number)
+						      (if (not (typep number 'ratio))
+							  number (coerce number 'double-float))))
+		   (let ((d-product (* (denominator omega) (denominator alpha))))
+		     (/ (funcall function (* d-product omega) (* d-product alpha))
+			d-product)))))))
+  
 (defun scalar-compare (comparison-tolerance)
   "Compare two scalar values as appropriate for APL."
   (lambda (omega alpha)
@@ -59,6 +105,7 @@
 	     omega alpha)))
 
 (defun compare-by (symbol comparison-tolerance)
+  "Generate a comparison function using the [⎕CT comparison tolerance]."
   (lambda (omega alpha)
     (funcall (if (and (numberp alpha) (numberp omega))
 		 (if (not (or (floatp alpha) (floatp omega)))
@@ -426,49 +473,53 @@
 
 (defun encode (omega alpha &optional inverse)
   "Encode a number or array of numbers as per a given set of bases. Used to implement [⊤ encode]."
-  (let* ((omega (if (arrayp omega)
-		    omega (enclose-atom omega)))
-	 (alpha (if (arrayp alpha)
-		    alpha (if (not inverse)
-			      ;; if the encode is an inverted decode, extend a
-			      ;; scalar left argument to the appropriate degree
-			      (enclose-atom alpha)
-			      (let ((max-omega 0))
-				(if (arrayp omega)
-				    (dotimes (i (size omega))
-				      (setq max-omega (max max-omega (row-major-aref omega i))))
-				    (setq max-omega omega))
-				(make-array (1+ (floor (log max-omega) (log alpha)))
-					    :initial-element alpha)))))
-	 (odims (dims omega)) (adims (dims alpha))
-	 (osize (size omega)) (asize (size alpha))
-	 (last-adim (first (last adims)))
-	 (out-coords (loop :for i :below (+ (- (rank alpha) (count 1 adims))
-					    (- (rank omega) (count 1 odims))) :collect 0))
-	 (out-dims (append (loop :for dim :in adims :when (< 1 dim) :collect dim)
-			   (loop :for dim :in odims :when (< 1 dim) :collect dim)))
-	 ;; currently, the output is set to t because due to the cost of finding the highest array value
-	 (output (if out-dims (make-array out-dims)))
-	 (aseg-last (reduce #'* (butlast adims 1)))
-	 (aseg-first (reduce #'* (rest adims)))
-	 (ofactor (* osize aseg-first)))
-    (ydotimes output (i (size output))
-      (multiple-value-bind (o a) (floor i asize)
-      	(let ((value (row-major-aref omega o))
-      	      (last-base 1) (base 1) (component 1) (element 0)
-	      (increment (if (/= 1 aseg-last) aseg-last asize)))
-      	  (loop :for index :from (1- increment) :downto (mod a increment)
-      	     :do (setq last-base base
-      		       base (* base (row-major-aref alpha (+ (* index aseg-first)
-							     (floor a increment))))
-      		       component (if (= 0 base) value (nth-value 1 (floor value base)))
-      		       value (- value component)
-      		       element (if (= 0 last-base) 0 (floor component last-base))))
-      	  (if output (setf (row-major-aref output (+ o (* osize (floor a aseg-last))
-						     (* ofactor (mod a aseg-last))))
-      			   element)
-	      (setq output element)))))
-    output))
+  (if (and (vectorp alpha) (= 0 (length alpha)))
+      #() (let* ((omega (if (arrayp omega)
+			    omega omega))
+		 (alpha (if (arrayp alpha)
+			    alpha (if (not inverse)
+				      ;; if the encode is an inverted decode, extend a
+				      ;; scalar left argument to the appropriate degree
+				      alpha
+				      (let ((max-omega 0))
+					(if (arrayp omega)
+					    (dotimes (i (size omega))
+					      (setq max-omega (max max-omega (row-major-aref omega i))))
+					    (setq max-omega omega))
+					(make-array (1+ (floor (log max-omega) (log alpha)))
+						    :initial-element alpha)))))
+		 (odims (dims omega)) (adims (dims alpha))
+		 (osize (size omega)) (asize (size alpha))
+		 (last-adim (first (last adims)))
+		 (out-coords (loop :for i :below (+ (- (rank alpha) (count 1 adims))
+						    (- (rank omega) (count 1 odims))) :collect 0))
+		 (out-dims (append (loop :for dim :in adims :when t :collect dim)
+				   (loop :for dim :in odims :when t :collect dim)))
+		 ;; currently, the output is set to t because due to the cost of finding the highest array value
+		 (output (if out-dims (make-array out-dims)))
+		 (aseg-last (reduce #'* (butlast adims 1)))
+		 (aseg-first (reduce #'* (rest adims)))
+		 (ofactor (* osize aseg-first)))
+	    ;; (print (list :oo out-dims omega alpha adims odims))
+	    (dotimes (i (size output))
+	      (multiple-value-bind (o a) (floor i asize)
+      		(let ((value (if (not (arrayp omega))
+				 omega (row-major-aref omega o)))
+      		      (last-base 1) (base 1) (component 1) (element 0)
+		      (increment (if (/= 1 aseg-last) aseg-last asize)))
+      		  (loop :for index :from (1- increment) :downto (mod a increment)
+      		     :do (setq last-base base
+      			       base (* base (if (not (arrayp alpha))
+						alpha (row-major-aref alpha (+ (* index aseg-first)
+									       (floor a increment)))))
+      			       component (if (= 0 base) value (nth-value 1 (floor value base)))
+      			       value (- value component)
+      			       element (if (= 0 last-base) 0 (floor component last-base))))
+      		  (if output (setf (row-major-aref output (+ o (* osize (floor a aseg-last))
+							     (* ofactor (mod a aseg-last))))
+      				   element)
+		      (setq output element)))))
+	    output)))
 
 (defun decode (omega alpha)
   "Decode an array of numbers as per a given set of bases. Used to implement [⊥ decode]."
@@ -549,6 +600,16 @@
 					      segments))
 		   :format (lambda (number &optional segments rps)
 			     (print-apl-number-string number segments print-precision alpha rps)))))
+
+(defun format-array-uncollated (input &optional print-precision)
+  "Use (aplesque:array-impress) to print an array in matrix form without collation. Used to implement ⎕FMT."
+  (if (and print-precision (not (integerp print-precision)))
+      (error (concatenate 'string "The left argument to ⍕ must be an integer specifying"
+			  " the precision at which to print floating-point numbers.")))
+  (array-impress input :segment (lambda (number &optional segments)
+				  (count-segments number print-precision segments))
+		 :format (lambda (number &optional segments rps)
+			   (print-apl-number-string number segments print-precision print-precision rps))))
 
 (defun generate-index-array (array)
   "Given an array, generate an array of the same shape whose each cell contains its row-major index."

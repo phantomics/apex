@@ -22,7 +22,8 @@
 
 (defvar *april-parallel-kernel*)
 
-(defvar *demo-packages* '(april-demo.cnn april-demo.dfns.array april-demo.dfns.graph))
+(defvar *demo-packages* '(april-demo.cnn april-demo.dfns.array
+			  april-demo.dfns.graph april-demo.dfns.numeric))
 
 (defvar ∇ nil)
 (defvar ∇∇ nil)
@@ -68,9 +69,11 @@
 			     (pprint-fill s list))))
 
 (defun load-demos ()
+  "Load the April demo packages."
   (loop :for package-symbol :in *demo-packages* :do (asdf:load-system package-symbol)))
 
 (defun run-demo-tests ()
+  "Run the tests for each April demo package."
   (loop :for package-symbol :in *demo-packages*
      :do (if (asdf:registered-system package-symbol)
 	     (let ((run-function-symbol (intern "RUN-TESTS" (string-upcase package-symbol))))
@@ -92,6 +95,7 @@
        ,symbol (intern (string ,symbol) space)))
 
 (defmacro alambda (params options &body body)
+  "Generate a lambda with a self-reference for use with APL's ∇ character for self-reference in a defn."
   (let* ((options (rest options))
 	 (system-vars (rest (assoc :sys-vars options))))
     `(labels ((∇self ,params
@@ -107,6 +111,7 @@
      #'∇oself))
 
 (defmacro achoose (item indices &rest rest-params)
+  "Wrapper for the choose function."
   (let ((indices-evaluated (gensym)))
     `(let ((,indices-evaluated ,indices))
        (choose ,item ,indices-evaluated ,@rest-params))))
@@ -472,8 +477,11 @@
 					      `(λω (apl-call ,(or-functional-character ,first-op :fn)
 							     ,(resolve-function :monadic ,first-op ,first-axes)
 							     omega))
-					      (if (and (listp ,first-op) (eql 'function (first ,first-op)))
-						  ,first-op (if (eql '⍺⍺ ,first-op) ,first-op))))
+					      (if (listp ,first-op)
+						  (if (eql 'function (first ,first-op))
+						      ,first-op (if (eql 'wrap-fn-ref (first ,first-op))
+								    (second ,first-op)))
+						  (if (eql '⍺⍺ ,first-op) ,first-op))))
 					(left-fn-monadic-inverse
 					 `(if (resolve-function :monadic-inverse ,first-op ,first-axes)
 					      `(λω (apl-call ,(or-functional-character ,first-op :fn)
@@ -485,8 +493,11 @@
 					      `(λωα (apl-call ,(or-functional-character ,first-op :fn)
 							      ,(resolve-function :dyadic ,first-op ,first-axes)
 							      omega alpha))
-					      (if (and (listp ,first-op) (eql 'function (first ,first-op)))
-						  ,first-op (if (eql '⍺⍺ ,first-op) ,first-op))))
+					      (if (listp ,first-op)
+						  (if (eql 'function (first ,first-op))
+						      ,first-op (if (eql 'wrap-fn-ref (first ,first-op))
+								    (second ,first-op)))
+						  (if (eql '⍺⍺ ,first-op) ,first-op))))
 					(left-fn-dyadic-inverse
 					 `(if (resolve-function :dyadic-inverse ,first-op)
 					      `(λωα (apl-call ,(or-functional-character ,first-op :fn)
@@ -506,15 +517,21 @@
 							     ,(resolve-function :monadic
 										,second-op ,second-axes)
 							     omega))
-					      (if (and (listp ,second-op) (eql 'function (first ,second-op)))
-						  ,second-op (if (eql '⍵⍵ ,second-op) ,second-op))))
+					      (if (listp ,second-op)
+						  (if (eql 'function (first ,second-op))
+						      ,second-op (if (eql 'wrap-fn-ref (first ,second-op))
+								     (second ,second-op)))
+						  (if (eql '⍵⍵ ,second-op) ,second-op))))
 					(right-fn-dyadic
 					 `(if (resolve-function :dyadic ,second-op ,second-axes)
 					      `(λωα (apl-call ,(or-functional-character ,second-op :fn)
 							      ,(resolve-function :dyadic ,second-op ,second-axes)
 							      omega alpha))
-					      (if (and (listp ,second-op) (eql 'function (first ,second-op)))
-						  ,second-op (if (eql '⍵⍵ ,second-op) ,second-op))))
+					      (if (listp ,second-op)
+						  (if (eql 'function (first ,second-op))
+						      ,second-op (if (eql 'wrap-fn-ref (first ,second-op))
+								     (second ,second-op)))
+						  (if (eql '⍵⍵ ,second-op) ,second-op))))
 					(right-fn-symbolic `(resolve-function :symbolic
 									      ,second-op ,second-axes))))))
 	 ,@(if ignorables `((declare (ignorable ,@ignorables))))
@@ -747,23 +764,26 @@ It remains here as a standard against which to compare methods for composing APL
 					  (list ,@axes))))
 	      (rest axis-sets)))))
 
-(defun coerce-type (array type-index)
+(defun coerce-or-get-type (array &optional type-index)
   "Create an array with a numerically designated type holding the contents of the given array."
-  (let ((type (case type-index (0 t) (-1 'bit) (1 '(unsigned-byte 2)) (2 '(unsigned-byte 4))
-		    (-3 '(unsigned-byte 7)) (3 '(unsigned-byte 8)) (-4 '(unsigned-byte 15))
-		    (4 '(unsigned-byte 16)) (-5 '(unsigned-byte 31)) (5 '(unsigned-byte 32))
-		    (-6 '(unsigned-byte 63)) (6 '(unsigned-byte 64))
-		    (13 '(signed-byte 8)) (14 '(signed-byte 16)) (15 '(signed-byte 32))
-		    (-16 '(signed-byte 63)) (16 '(signed-byte 64)) (21 'fixnum)
-		    (31 'short-float) (32 'single-float)
-		    (34 'double-float) (35 'long-float)
-		    (98 'base-char) (99 'character))))
-    (if (or (not (arrayp array))
-	    (equalp type (element-type array)))
-	array (let ((output (make-array (dims array) :element-type type)))
-		(dotimes (i (size array)) (setf (row-major-aref output i)
-						(row-major-aref array i)))
-		output))))
+  (let ((types '((0 t) (-1 bit) (1 (unsigned-byte 2)) (2 (unsigned-byte 4))
+		 (-3 (unsigned-byte 7)) (3 (unsigned-byte 8)) (-4 (unsigned-byte 15))
+		 (4 (unsigned-byte 16)) (-5 (unsigned-byte 31)) (5 (unsigned-byte 32))
+		 (-6 (unsigned-byte 63)) (6 (unsigned-byte 64))
+		 (13 (signed-byte 8)) (14 (signed-byte 16)) (15 (signed-byte 32))
+		 (-16 (signed-byte 63)) (16 (signed-byte 64)) (21 fixnum)
+		 (31 short-float) (32 single-float) (34 double-float) (35 long-float)
+		 (48 base-char) (49 character)))
+	(type))
+    (if type-index
+	(progn (loop :for item :in types :when (= type-index (first item)) :do (setf type (second item)))
+	       (if (or (not (arrayp array))
+		       (equalp type (element-type array)))
+		   array (let ((output (make-array (dims array) :element-type type)))
+			   (xdotimes output (i (size array)) (setf (row-major-aref output i)
+								   (row-major-aref array i)))
+			   output)))
+	(loop :for item :in types :when (equalp (element-type array) (second item)) :return (first item)))))
 
 (defun output-value (space form &optional properties)
   "Express an APL value in the form of an explicit array specification or a symbol representing an array, supporting axis arguments."

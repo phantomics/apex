@@ -1,4 +1,7 @@
-⍝ Ported from http://dfns.dyalog.com/n_Graphs.htm into April APL
+⍝⍝ Ported from http://dfns.dyalog.com/n_Graphs.htm into April APL
+
+
+⍝⍝ Graph processing
 
 ⍝ From http://dfns.dyalog.com/n_alists.htm
 
@@ -130,4 +133,18 @@ stpaths ← {                             ⍝ Spanning tree paths.
       paths ∇ indx                      ⍝ advance to next tree level.
      ]
   }root                                 ⍝ index of starting vertex.
+}
+
+
+⍝⍝ Weighted graph processing
+
+wcost←{                                 ⍝ Cost vector for path ⍵ through weighted graph ⍺.
+  graph costs←↓⍺                        ⍝ edges and edge-costs.
+  $[2>≢⍵;0;                             ⍝ null path: no cost.
+    2{                                  ⍝ ⍺:from, ⍵:to.
+      node←,⍺⊃graph                     ⍝ exits from vertex.
+      indx←node⍳⍵                       ⍝ index of (⍺ ⍵) vertex.
+      indx⊃,⍺⊃costs                     ⍝ ... associated cost.
+    }/⍵                                 ⍝ pairwise along path.
+   ]
 }

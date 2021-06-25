@@ -28,6 +28,37 @@ alset ← {                                   ⍝ Assoc list ⍺ with (key value
 
 acc ← { ⊃⍺⍺{(⊂⍺ ⍺⍺⊃⍬⍴⍵),⍵}/1↓{⍵,⊂⍬⍴⍵}¯1⌽⍵ } ⍝ Accumulating reduction.
 
+⍝ From http://dfns.dyalog.com/c_display.htm
+
+display ← { ⎕IO←0                           ⍝ Boxed display of array.
+  box←{                                     ⍝ box with type and axes
+    vrt hrz←(¯1+⍴⍵)⍴¨'│─'                   ⍝ vert. and horiz. lines
+    top←'─⊖→'[¯1↑⍺],hrz                     ⍝ upper border with axis
+    bot←(⊃⍺),hrz                            ⍝ lower border with type
+    rgt←'┐│',vrt,'┘'                        ⍝ right side with corners
+    lax←'│⌽↓'[¯1↓1↓⍺],¨⊂vrt                 ⍝ left side(s) with axes,
+    lft←⍉'┌',(↑lax),'└'                     ⍝ ... and corners
+    lft,(top⍪⍵⍪bot),rgt                     ⍝ fully boxed array
+  }
+
+  open←{(1⌈⍴⍵)⍴⍵}                           ⍝ exposure of null axes
+  trim←{(~1 1⍷∧⌿⍵=' ')/⍵}                   ⍝ removal of extra blank cols
+  char←{$[⍬≡⍴⍵;'─';(⊃⍵∊'¯',⎕D)⊃'#~']}∘⍕     ⍝ simple scalar type
+  type←{{(1=⍴⍵)⊃'+'⍵}∪,char¨⍵}              ⍝ simple array type
+  axes←{(-2⌈⍴⍴⍵)↑1+×⍴⍵}                     ⍝ array axis types
+  deco←{⍺←type open ⍵ ⋄ ⍺,axes ⍵}           ⍝ type and axes vector
+  ⍝ line←{(6≠10|⎕DR' '⍵)⊃' -'}              ⍝ underline for atom
+  line←{(49≠⎕T 1⍴⍵)⊃' -'}                   ⍝ underline for atom
+  prnt←⎕PP∘⎕FMT
+
+  {                                         ⍝ recursive boxing of arrays:
+    $[0=≡⍵;' '⍪(open prnt ⍵)⍪line ⍵;        ⍝ simple scalar
+      1=≡⍵;(deco ⍵)box open prnt open ⍵;    ⍝ simple array
+      ('∊'deco ⍵)box trim prnt ∇¨open ⍵     ⍝ nested array
+     ]
+  }⍵
+}
+
 ⍝ From http://dfns.dyalog.com/c_enlist.htm
 
 enlist ← {                                  ⍝ List ⍺-leaves of nested array.
@@ -53,7 +84,7 @@ nlines ← {                                  ⍝ Number of display lines for si
 ⍝ From http://dfns.dyalog.com/s_perv.htm
 
 perv ← {                                    ⍝ Scalar pervasion
-  ⍺←⊢                                       ⍝ (⍺ and) ⍵ depth 0: operand fn application
+  ⍝ ⍺←⊢                                     ⍝ (⍺ and) ⍵ depth 0: operand fn application
   $[1=≡⍺ ⍵ ⍵;⍺ ⍺⍺ ⍵;⍺ ∇¨⍵]                  ⍝ (⍺ or) ⍵ deeper: recursive traversal.
 }
 

@@ -13,6 +13,7 @@
 (defun process-value (this-item properties process idiom space)
   ;; TODO: add a passthrough value mode for symbols that are being assigned!
   ;; this is the only way to get them assignable after the first time
+  ;; (print (list :it this-item properties))
   (cond ((and (listp this-item)
 	      (not (member (first this-item) '(:fn :op :axes))))
 	 ;; if the item is a closure, evaluate it and return the result
@@ -136,15 +137,21 @@
 	  ;; process sub-list in case it is a functional expression like (+∘*),
 	  ;; but don't do this if looking for a specific functional glyph
 	  (if (not (getf properties :glyph))
-	      (multiple-value-bind (output out-properties)
-	    	  (funcall process this-item)
-	    	(if (eq :function (first (getf out-properties :type)))
-	    	    (progn (if (not (member :enclosed (getf out-properties :type)))
-			       (setf (getf out-properties :type)
-	    			     (cons (first (getf out-properties :type))
-	    				   (cons :enclosed (rest (getf out-properties :type))))))
-	    		   (values output out-properties))
-	    	    (values nil nil)))
+	      (let ((sub-props (list :special
+				     (list :lexvar-symbols
+					   (remove-duplicates
+					    (getf (getf properties :special) :lexvar-symbols))
+					   :fn-assigned-symbols (getf (getf properties :special)
+								      :fn-assigned-symbols)))))
+		(multiple-value-bind (output out-properties)
+	    	    (funcall process this-item)
+	    	  (if (eq :function (first (getf out-properties :type)))
+	    	      (progn (if (not (member :enclosed (getf out-properties :type)))
+				 (setf (getf out-properties :type)
+	    			       (cons (first (getf out-properties :type))
+	    				     (cons :enclosed (rest (getf out-properties :type))))))
+	    		     (values output out-properties))
+	    	      (values nil nil))))
 	      (values nil nil)))
       (if (and (symbolp this-item)
 	       (not (getf properties :glyph)))
@@ -274,7 +281,7 @@
 			      ;; if axes are encountered, process the axes and the preceding
 			      ;; value as a new value
 			      (multiple-value-bind (output properties remaining)
-				  (funcall process items)
+				  (funcall process items special-props)
 				(if (eq :array (first (getf properties :type)))
 				    (setq items remaining
 					  value-elements (cons output value-elements)
@@ -309,7 +316,7 @@
 
 (composer-pattern composer-pattern-function (axes function-form function-props prior-items is-inline-operator)
     ;; match a function like × or {⍵+10}, marking the beginning of a functional expression
-    ((assign-axes axes)
+    ((assign-axes axes process)
      (setq prior-items items)
      (assign-element function-form function-props process-function (first (last preceding-properties)))
      (if (and (not function-form)
@@ -352,10 +359,10 @@
       (operator-axes operator-form operator-props operand-axes operand-form
 		     operand-props symbol-referenced)
       ;; match a lateral function composition like +/, marking the beginning of a functional expression
-      ((assign-axes operator-axes)
+      ((assign-axes operator-axes process)
        (setq symbol-referenced (verify-lateral-operator-symbol item space))
        (assign-element operator-form operator-props process-operator '(:valence :lateral))
-       (if operator-form (progn (assign-axes operand-axes)
+       (if operator-form (progn (assign-axes operand-axes process)
 				(assign-subprocessed operand-form operand-props
 		 				     `(:special (:omit (:value-assignment :function-assignment
 		 							:operation :operator-assignment
@@ -384,7 +391,14 @@
 		items)
 	(let ((operator (and (member :operator (getf operator-props :type))
 	      		     (member :lateral (getf operator-props :type))
-	      		     operator-form)))
+	      		     operator-form))
+	      ;; if the operand is a locally-assigned function, derive its symbol
+	      (assigned-operand (if (and (listp operand-form)
+					 (eql 'inws (first operand-form))
+					 (member (second operand-form)
+						 (getf (getf (first (last preceding-properties)) :special)
+						       :fn-assigned-symbols)))
+				    (list 'wrap-fn-ref operand-form))))
 	  (if operator
 	      (if (eq :operator-self-reference operator-form)
 		  (values `(apl-compose :op ∇oself ,operand-form)
@@ -406,15 +420,19 @@
 						     operand-form)))
 			      (cons 'apl-compose (cons (intern (string-upcase operator)
 							       *package-name-string*)
-	      					       (funcall (funcall (resolve-operator :lateral operator)
-	      								 operand-form (first operand-axes))
+						       (funcall (funcall (resolve-operator :lateral operator)
+	      								 (or assigned-operand operand-form)
+									 (first operand-axes))
 	      							(first operator-axes)))))
 	      		  '(:type (:function :operator-composed :lateral))
 	      		  items)))))))
 
 (composer-pattern composer-pattern-unitary-operation (operator-axes operator-form operator-props)
     ;; match a unitary operator like $
-    ((assign-axes operator-axes)
+    ((let ((sub-props (list :special (list :lexvar-symbols (getf (getf properties :special) :lexvar-symbols)
+					   :fn-assigned-symbols (getf (getf properties :special)
+								      :fn-assigned-symbols)))))
+       (assign-axes operator-axes (lambda (i) (funcall process i sub-props))))
      (assign-element operator-form operator-props process-operator '(:valence :unitary)))
   (let ((operator (and (member :operator (getf operator-props :type))
 		       (member :unitary (getf operator-props :type))
@@ -436,11 +454,11 @@
     (asop asop-props fn-element fnel-specs function-axes symbol symbol-props symbol-axes)
     ;; "Match the assignment of a function result to a value, like a+←5."
     ((assign-element asop asop-props process-function '(:glyph ←))
-     (if asop (assign-axes function-axes))
+     (if asop (assign-axes function-axes process))
      (if asop (assign-subprocessed fn-element fnel-specs
 				   `(:special (:omit (:value-assignment :function-assignment)
 						     ,@include-lexvar-symbols))))
-     (if fn-element (assign-axes symbol-axes))
+     (if fn-element (assign-axes symbol-axes process))
      (if fn-element (assign-element symbol symbol-props process-value '(:symbol-overriding t))))
   (if (and fn-element symbol)
       (let ((fn-content (resolve-function :dyadic fn-element))
@@ -525,7 +543,7 @@
 										i)
 									 (get-symbol-list i t)))))))
 				 (if valid out-list))))))
-		(assign-axes axes)
+		(assign-axes axes process)
 		(let ((symbols-present t))
 		  ;; collect each symbol to the left of ←, keeping them in (inws) forms if needed
       		  (loop :while symbols-present
@@ -792,7 +810,7 @@
     ;; Match an inline lateral operator composition like +{⍺⍺ ⍵}5.
     ((setq preceding-type (getf (first preceding-properties) :type))
      (assign-element operator operator-props process-operator '(:valence :lateral))
-     (if operator (progn (assign-axes left-operand-axes)
+     (if operator (progn (assign-axes left-operand-axes process)
 			 (setq prior-items items)
 			 (assign-element left-operand left-operand-props process-function)
 			 ;; if the next function is symbolic, assign it uncomposed;
@@ -844,7 +862,7 @@
     ;; It may come after either a function or an array, since some operators take array operands.
     ((setq preceding-type (getf (first preceding-properties) :type))
      (assign-element operator operator-props process-operator '(:valence :pivotal))
-     (if operator (progn (assign-axes left-operand-axes)
+     (if operator (progn (assign-axes left-operand-axes process)
 			 (setq prior-items items)
 			 (assign-element left-operand left-operand-props process-function)
 			 ;; if the next function is symbolic, assign it uncomposed;
@@ -863,10 +881,20 @@
   (if (and operator left-operand)
       ;; get left axes from the left operand and right axes from the precedent's properties so the
       ;; functions can be properly curried if they have axes specified
-      (let ((right-operand (insym precedent))
-	    (right-operand-axes (getf (first preceding-properties) :axes))
-	    (left-operand (insym left-operand))
-	    (omega (gensym)) (alpha (gensym)))
+      (let* ((right-operand (insym precedent))
+	     (right-operand-axes (getf (first preceding-properties) :axes))
+	     (left-operand (insym left-operand))
+	     (assigned-right-operand
+	      (if (and (listp right-operand) (eql 'inws (first right-operand))
+		       (member (second right-operand)
+			       (getf (getf (first (last preceding-properties)) :special) :fn-assigned-symbols)))
+		  (list 'wrap-fn-ref right-operand)))
+	     (assigned-left-operand
+	      (if (and (listp left-operand) (eql 'inws (first left-operand))
+		       (member (second left-operand)
+			       (getf (getf (first (last preceding-properties)) :special) :fn-assigned-symbols)))
+		  (list 'wrap-fn-ref left-operand)))
+	     (omega (gensym)) (alpha (gensym)))
 	;; single character values are passed within a (:char) form so they aren't interpreted as
 	;; functional glyphs by the (resolve-function) calls
 	(if (and (characterp left-operand) (member :array (getf left-operand-props :type)))
@@ -899,8 +927,10 @@
 							       ;; TODO: taking (first) of axes
 							       ;; eliminates possible future functions
 							       ;; that take more than one axis argument
-							       left-operand (first left-operand-axes)
-							       right-operand (first right-operand-axes))
+							       (or assigned-left-operand left-operand)
+							       (first left-operand-axes)
+							       (or assigned-right-operand right-operand)
+							       (first right-operand-axes))
 						      right-operand left-operand))))
 		'(:type (:function :operator-composed :pivotal)) items))))
 
@@ -938,7 +968,6 @@
 		(if (and (not function-axes) (member :axes function-props))
 		    (setq function-axes (getf function-props :axes))))))
   (if is-function (let* ((fn-content (if (or (functionp fn-element)
-					     
 					     (and (symbolp fn-element)
 						  (member fn-element '(⍺⍺ ⍵⍵ ∇ ∇∇)))
 					     (and (listp fn-element)

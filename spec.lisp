@@ -13,7 +13,7 @@
 				 *alphabet-vector* *apl-timestamp* to-output output-stream))
 
 (defvar *system-variables* '(:index-origin *index-origin* :print-precision *print-precision*
-			     :comparison-tolerance *comparison-tolerance*))
+			     :comparison-tolerance *comparison-tolerance* :division-method *division-method*))
 
 (let ((circular-functions ;; APL's set of circular functions called using the ○ symbol with a left argument
        (vector (lambda (x) (exp (complex 0 x)))
@@ -40,7 +40,9 @@
  ;; system variables and default state of an April workspace
  (system :output-printed nil
 	 :base-state '(:output-stream '*standard-output*)
-	 :workspace-defaults '(:index-origin 1 :print-precision 10 :comparison-tolerance double-float-epsilon))
+	 :workspace-defaults '(:index-origin 1 :print-precision 10 :division-method 0
+			       :comparison-tolerance double-float-epsilon)
+	 :variables *system-variables*)
 
  ;; standard grammar components, with elements to match the basic language forms and
  ;; pattern-matching systems to register combinations of those forms
@@ -53,8 +55,7 @@
  (profiles (:test :lexical-functions-scalar-numeric :lexical-functions-scalar-logical
 		  :lexical-functions-array :lexical-functions-special :lexical-operators-lateral
 		  :lexical-operators-pivotal :lexical-operators-unitary :general-tests
-		  :system-variable-function-tests :function-inversion-tests
-		  :printed-format-tests)
+		  :system-variable-function-tests :function-inversion-tests :printed-format-tests)
 	   (:arbitrary-test :output-specification-tests)
 	   (:time :lexical-functions-scalar-numeric :lexical-functions-scalar-logical
 	       	  :lexical-functions-array :lexical-functions-special :lexical-operators-lateral
@@ -213,10 +214,10 @@
 	    :build-compiled-code #'build-compiled-code)
 
  ;; specs for multi-character symbols exposed within the language
- (symbols (:variable ⎕ to-output ⎕io *index-origin* ⎕pp print-precision
+ (symbols (:variable ⎕ to-output ⎕io *index-origin* ⎕pp print-precision ⎕div *division-method*
 		       ⎕ost output-stream ⎕ct *comparison-tolerance*)
 	  (:constant ⎕a *alphabet-vector* ⎕d *digit-vector* ⎕ts *apl-timestamp*)
-	  (:function ⎕t coerce-type))
+	  (:function ⎕t coerce-or-get-type ⎕fmt format-array-uncollated))
  
  ;; APL's set of functions represented by characters
  (functions
@@ -243,11 +244,15 @@
 	    (is "2×3" 6)
 	    (is "4 5×8 9" #(32 45))))
   (÷ (has :titles ("Reciprocal" "Divide"))
-     (ambivalent :symmetric-scalar (reverse-op /))
-     (inverse (ambivalent (reverse-op /) :plain (reverse-op /) :right-composed *))
+     (ambivalent :symmetric-scalar (apl-divide division-method))
+     (inverse (ambivalent (apl-divide division-method)
+			  :plain (apl-divide division-method) :right-composed *))
      (tests (is "6÷2" 3)
 	    (is "12÷6 3 2" #(2 4 6))
-	    (is "÷2 4 8" #(1/2 1/4 1/8))))
+	    (is "÷2 4 8" #(1/2 1/4 1/8))
+	    (is "{⎕div←0 ⋄ ÷⍨⍵} 0" 1)
+	    (is "{⎕div←1 ⋄ ÷⍨⍵} 0" 0)
+	    (is "{⎕div←1 ⋄ ÷⍵} 0" 0)))
   (⋆ (has :titles ("Exponential" "Power") :aliases (*))
      (ambivalent :asymmetric-scalar exp (reverse-op :dyadic expt))
      (inverse (ambivalent log :plain log :right-composed (λωα (expt alpha (/ omega)))))
@@ -268,18 +273,16 @@
      (ambivalent :asymmetric-scalar sprfact binomial)
      (tests (is "!5" 120)
 	    (is "5!12" 792)
-            (is "{⍵∘.!⍵}¯3+⍳7" #2A((1 -1 0 0 0 0 0) (0 1 0 0 0 0 0)
-				   (1 1 1 1 1 1 1) (-2 -1 0 1 2 3 4)
-				   (3 1 0 0 1 3 6) (-4 -1 0 0 0 1 4)
-				   (5 1 0 0 0 0 1)))))
+            (is "∘.!⍨¯3+⍳7" #2A((1 -1 0 0 0 0 0) (0 1 0 0 0 0 0) (1 1 1 1 1 1 1) (-2 -1 0 1 2 3 4)
+				(3 1 0 0 1 3 6) (-4 -1 0 0 0 1 4) (5 1 0 0 0 0 1)))))
   (⌈ (has :titles ("Ceiling" "Maximum"))
-     (ambivalent :asymmetric-scalar ceiling (reverse-op max))
+     (ambivalent :asymmetric-scalar apl-ceiling (reverse-op max))
      (inverse (dyadic :commuted identity))
      (tests (is "⌈1.0001" 2)
 	    (is "⌈1.9998" 2)
 	    (is "3⌈0 1 2 3 4 5" #(3 3 3 3 4 5))))
   (⌊ (has :titles ("Floor" "Minimum"))
-     (ambivalent :asymmetric-scalar floor (reverse-op min))
+     (ambivalent :asymmetric-scalar apl-floor (reverse-op min))
      (inverse (dyadic :commuted identity))
      (tests (is "⌊1.0001" 1)
 	    (is "⌊1.9998" 1)
@@ -367,13 +370,13 @@
 	    (is "3≠1 2 3 4 5" #*11011)
 	    (is "'Harrison'≠'Bergeron'" #*11011100)))
   (∧ (has :title "And" :aliases (^))
-     (dyadic (scalar-function (reverse-op lcm)))
+     (dyadic (scalar-function (apl-xcy #'lcm)))
      (tests (is "0 1 0 1∧0 0 1 1" #*0001)))
   (⍲ (has :title "Nand")
      (dyadic (scalar-function (boolean-op (λωα (not (= omega alpha 1))))))
      (tests (is "0 1 0 1⍲0 0 1 1" #*1110)))
   (∨ (has :title "Or")
-     (dyadic (scalar-function (reverse-op gcd)))
+     (dyadic (scalar-function (apl-xcy #'gcd)))
      (tests (is "0 1 0 1∨0 0 1 1" #*0111)))
   (⍱ (has :title "Nor")
      (dyadic (scalar-function (boolean-op (λωα (= omega alpha 0)))))
@@ -431,7 +434,7 @@
   	    (is "1 3⌷[1 3]2 3 4⍴⍳5" #(3 2 1))
 	    (is "1⌷[2]3 3⍴⍳9" #(1 4 7))
   	    (is "(⊂4 5 2 6 3 7 1)⌷'MARANGA'" "ANAGRAM")
-	    (is "(⍬,5) 1⌷5 5⍴⍳25" 21)
+	    (is "(⍬,5) 1⌷5 5⍴⍳25" #(21))
 	    (is "(5 4) 1⌷5 5⍴⍳25" #(21 16))))
   (≡ (has :titles ("Depth" "Match"))
      (ambivalent #'find-depth (boolean-op array-compare))
@@ -501,6 +504,8 @@
 	     (is "⊃,[2]/(⊂3 3)⍴¨⍳5" #2A((1 1 1 2 2 2 3 3 3 4 4 4 5 5 5)
 					(1 1 1 2 2 2 3 3 3 4 4 4 5 5 5)
 					(1 1 1 2 2 2 3 3 3 4 4 4 5 5 5)))
+	     (is ",[⍬]5" #(5))
+	     (is ",[⍬]⍳5" #2A((1) (2) (3) (4) (5)))
 	     (is "5 6,3" #(5 6 3))
 	     (is "2,⍳3" #(2 1 2 3))
   	     (is "0,3 4⍴⍳9" #2A((0 1 2 3 4) (0 5 6 7 8) (0 9 1 2 3)))
@@ -1219,7 +1224,8 @@
 	     (is "''∘.=''" #2A())
 	     (is "fn←{⍺×⍵+1} ⋄ 1 2 3∘.fn 4 5 6" #2A((5 6 7) (10 12 14) (15 18 21)))
 	     (is "' ' { A W←{(⍵≠(≢⍵)⍴' ')/⍵}¨⍺ ⍵ ⋄ ((⍴A)=⍴W) ∧ ∧/(+/A∘.=W) = +/A∘.=A } 'dog'" #(0))
-	     (is "⍴+.×⌿?2 30 30⍴1e10" #(30 30))))
+	     (is "⍴+.×⌿?2 30 30⍴1e10" #(30 30))
+	     (is "'ADG',.,'EIHF' 'BIHC' 'BFEC'" #0A"AEIHFDBIHCGBFEC")))
   (∘ (has :title "Compose")
      (pivotal (with-derived-operands (right left right-glyph right-fn-monadic right-fn-dyadic
 					    left-glyph left-fn-monadic left-fn-dyadic)
@@ -1410,7 +1416,7 @@
   (for "Scalar values operated upon." "3×3" 9)
   (for "Array and scalar values operated upon." "5+1 2 3" #(6 7 8))
   (for "Two array values operated upon." "4 12 16÷2 3 4" #(2 4 4))
-  (for "Monadic operation upon nested vectors." "-(1 2 3)(4 5 6)" #(#0A#(-1 -2 -3) #0A#(-4 -5 -6)))
+  (for "Monadic operation upon nested vectors." "-(1 2 3)(4 5 6)" #(#(-1 -2 -3) #(-4 -5 -6)))
   (for "Dyadic operation upon nested vectors."
        "((1 2 3)(4 5 6))×(7 8 9)(10 11 12)" #(#(7 16 27) #(40 55 72)))
   (for "Scalar operation with axes on arrays of differing ranks."
@@ -1493,6 +1499,8 @@
        "(3 4⍴⍳9)[2 2⍴⊂(2 3)]" #2A((7 7) (7 7)))
   (for "Reach indexing of components within sub-arrays."
        "(2 3⍴('JAN' 1)('FEB' 2)('MAR' 3)('APR' 4)('MAY' 5)('JUN' 6))[((2 3)1)((1 1)2)]" #(#0A"JUN" 1))
+  (for "Creation of empty array by passing empty vectors as indices." "(⍳3)[⍬]" #())
+  (for "As above with multiple dimensions." "(⍴(5 5 5⍴1)[;⍬;2 3]),⍴(3 3⍴1)[⍬;]" #(5 0 2 0 3))
   (for "Assignment by function." "a←3 2 1 ⋄ a+←5 ⋄ a" #(8 7 6))
   (for "Assignment by function at index." "a←3 2 1 ⋄ a[2]+←5 ⋄ a" #(3 7 1))
   (for "Elided assignment of applied function's results."
@@ -1598,6 +1606,12 @@
        "{⍵,≡⍵}4⌷{((5=¯1↑⍵)+1)⊃¯1 (⊂⍵)}¨(⊂1 5),⍨3⍴⊂⍳4" #(#0A#(1 5) 3))
   (for "Fibonacci sequence generated using [∇ self] for self-reference within a function."
        "{$[(⍵=1)∨⍵=2;1;(∇ (⍵-2))+∇ (⍵-1)]}¨⍳7" #(1 1 2 3 5 8 13))
+  (for "Locally-scoped function used with lateral operator within if-statement."
+       "(⍳3){ g←{5+⍵} ⋄ b←-∘5 ⋄ h←{12×$[~2|⍺;b¨⍵;g ⍵]} ⋄ ⍺ h¨⍵} (⍳3)+3⍴⊂⍳3"
+       #(#(84 96 108) #(-24 -12 0) #(108 120 132)))
+  (for "Locally-scoped function used with operator within if-statement."
+       "(⍳3){ g←{⍵×⍺-2} ⋄ b←{⍺×⍵÷3} ⋄ h←{12×$[~2|⍺;⍺ (b . g) ⍵;⍺ g ⍵]} ⋄ ⍺ h¨⍵} (⍳3)+3⍴⊂⍳3"
+       #(#(-24 -36 -48) 0 #(48 60 72)))
   (for "Glider 1." "(3 3⍴⍳9)∊1 2 3 4 8" #2A((1 1 1) (1 0 0) (0 1 0)))
   (for "Glider 2." "3 3⍴⌽⊃∨/1 2 3 4 8=⊂⍳9" #2A((0 1 0) (0 0 1) (1 1 1))))
 
@@ -1676,8 +1690,8 @@
   (for-printed "Vector of mixed integers and floats." "12.5 3 42.890 90.5001 8 65"
 	       "12.5 3 42.89 90.5001 8 65
 ")
-  (for-printed "Oversized take of float vector, the filler zeroes printed without decimal points."
-	       "6↑○⍳3" "3.141592654 6.283185307 9.424777961 0 0 0
+  (for-printed "Overtake of float vector."
+	       "6↑○⍳3" "3.141592654 6.283185307 9.424777961 0.0 0.0 0.0
 ")
   (for-printed "Numeric matrix." "3 4⍴⍳9" "1 2 3 4
 5 6 7 8

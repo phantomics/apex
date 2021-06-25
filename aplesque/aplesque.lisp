@@ -197,14 +197,16 @@
   (labels ((derive-element (input)
 	     (if (characterp input)
 		 #\  (if (not (arrayp input))
-			 0 (if (= 0 (size input))
-			       (make-array (dims input))
-			       (derive-element (row-major-aref input 0)))))))
+			 (let ((itype (type-of input)))
+			   (coerce 0 (if (eql 'ratio itype) 'integer itype)))
+			 (if (= 0 (size input))
+			     (make-array (dims input))
+			     (derive-element (row-major-aref input 0)))))))
     (if (not (arrayp array))
 	(derive-element array)
 	(if (= 0 (size array))
 	    (if (eql 'character (element-type array))
-		#\  0)
+		#\  (coerce 0 (element-type array)))
 	    (let ((first-element (row-major-aref array 0)))
 	      (if (not (arrayp first-element))
 		  (derive-element first-element)
@@ -375,6 +377,7 @@
 	 ;; for boolean arrays, check whether the output will directly hold the array contents
 	 (output (if (not (and oscalar (or ascalar (not alpha))))
 		     (make-array output-dims :element-type output-type))))
+    ;; (print (list :om omega alpha is-non-scalar-function))
     (flet ((promote-or-not (item)
 	     ;; function for wrapping output in a vector or 0-rank array if the input was thusly formatted
 	     (declare (dynamic-extent item))
@@ -390,7 +393,7 @@
 								     axes is-boolean is-non-scalar-function)
 						       (funcall function oscalar))))
 	      (xdotimes output (i (size omega))
-		 (setf (row-major-aref output i) (nest (apply-scalar function (row-major-aref omega i))))))
+		 (setf (row-major-aref output i) (apply-scalar function (row-major-aref omega i)))))
 	  (if (and oscalar ascalar)
 	      ;; if both arguments are scalar or 1-element, return the output of the function on both,
 	      ;; remembering to promote the output to the highest rank of the input, either 0 or 1 if not scalar
@@ -404,10 +407,13 @@
 			  (and (= orank arank)
 			       (loop :for da :in (dims alpha) :for do :in (dims omega) :always (= da do))))
 		      ;; map the function over identically-shaped arrays
-		      (dotimes (i (size output))
-			(setf (row-major-aref output i)
-			      (apply-scalar function (or oscalar (disclose (row-major-aref omega i)))
-					    (or ascalar (disclose (row-major-aref alpha i))))))
+		      (if (and is-non-scalar-function (or oscalar ascalar))
+			  (setq output (funcall function omega alpha))
+			  (dotimes (i (size output))
+			    (setf (row-major-aref output i)
+				  (apply-scalar function (or oscalar (disclose (row-major-aref omega i)))
+						(or ascalar (disclose (row-major-aref alpha i)))
+						nil is-boolean is-non-scalar-function))))
 		      ;; if axes are given, go across the higher-ranked function and call the function on its
 		      ;; elements along with the appropriate elements of the lower-ranked function
 		      (if axes (destructuring-bind (lowrank highrank &optional omega-lower)
@@ -1023,26 +1029,30 @@
 		   (axis (or axis (if (not last-axis) 0 (max 0 (1- (rank input))))))
 		   (rlen (nth axis odims))
 		   (increment (reduce #'* (nthcdr (1+ axis) odims)))
+		   (window-reversed (and window (> 0 window)))
+		   (window (if window (abs window)))
 		   (wsegment)
 		   (output (make-array (loop :for dim :in odims :for dx :from 0
 					  :when (/= dx axis) :collect dim
 					  :when (and window (= dx axis))
 					  :collect (setq wsegment (- dim (1- window)))))))
-	      (xdotimes output (i (size output))
+	      (dotimes (i (size output)) ;; xdo
 		(declare (optimize (safety 1)))
 		(let ((value))
-		  (loop :for ix :from (1- (or window rlen)) :downto 0
-		     :do (let ((item (row-major-aref
-				      input (+ (* ix increment)
-					       (if window (* rlen (floor i wsegment))
-						   (if (= 1 increment)
-						       0 (* (floor i increment)
-							    (- (* increment rlen) increment))))
-					       (if (/= 1 increment) i
-						   (if window (if (>= 1 (rank input))
-								  i (mod i wsegment))
-						       (* i rlen)))))))
-			   (setq value (if (not value) item (funcall function value item)))))
+		  (flet ((process-item (ix)
+			   (let ((item (row-major-aref
+					input (+ (* ix increment)
+						 (if window (* rlen (floor i wsegment))
+						     (if (= 1 increment)
+							 0 (* (floor i increment)
+							      (- (* increment rlen) increment))))
+						 (if (/= 1 increment) i
+						     (if window (if (>= 1 (rank input))
+								    i (mod i wsegment))
+							 (* i rlen)))))))
+			     (setq value (if (not value) item (funcall function value item))))))
+		    (if window-reversed (loop :for ix :below window :do (process-item ix))
+			(loop :for ix :from (1- (or window rlen)) :downto 0 :do (process-item ix))))
 		  (setf (row-major-aref output i) value)))
 	      (if (not (and (= 0 (rank output))
 			    (= 0 (rank (aref output)))))
@@ -1060,6 +1070,7 @@
 				omega (make-array osegment :element-type (element-type omega)))))
 	 (output (make-array (append (butlast adims) (rest odims)))))
     ;; TODO: can't parallelize yet
+    ;; (print (list :oo alpha omega output))
     (dotimes (x (size output))
       (let* ((avix (floor x ovectors))
 	     (ovix (mod x ovectors))
@@ -1364,10 +1375,11 @@
 
 (defun choose (input indices &key (set) (set-by) (modify-input))
   "Select indices from an array and return them in an array shaped according to the requested indices, with the option to elide indices and perform an operation on the values at the indices instead of just fetching them and return the entire altered array."
-  (let* ((idims (dims input)) (sdims (if set (dims set)))
+  (let* ((empty-output) (idims (dims input)) (sdims (if set (dims set)))
 	 ;; contents removed from 1-size arrays in the indices
-	 (indices (loop :for i :in indices :collect (if (not (and (arrayp i) (= 1 (size i))))
-							i (row-major-aref i 0))))
+	 (indices (loop :for i :in indices :collect ;; (if (not (and (arrayp i) (= 1 (size i))))
+						    ;; 	i (row-major-aref i 0))
+		       i))
 	 (index1 (first indices)) (naxes (< 1 (length indices)))
 	 (odims (if naxes (loop :for i :in indices :for d :in idims :for s :from 0
 			     :append (let ((len (or (and (null i) (list d))
@@ -1382,9 +1394,13 @@
 				       (if (and len sdims (or (< 1 (length len))
 							      (/= (first len) (nth s sdims))))
 					   (error "Invalid input."))
+				       (if (and len (= 0 (first len))) (setq empty-output t))
 				       len))
 		    (if (or set set-by) (dims input)
-			(dims (or (first indices) input)))))
+			(let ((od (dims (or (first indices) input))))
+			  (if (and od (= 0 (first od)))
+			      (setq empty-output t))
+			  od))))
 	 (rmi-type (list 'integer 0 (reduce #'* idims)))
 	 (index-vector (if (and (arrayp index1) (not naxes))
 			   (let ((reach-indexing)
@@ -1410,20 +1426,21 @@
 	 ;; create output array if 1. nothing is being set, this is just a retrieval operation, or
 	 ;; 2. a scalar value is being set and its type is not compatible with the input
 	 ;; or 3. the input and the items to set are in arrays of different types
-	 (output (if (or set-by (and (or (not set)
-					 ;; an output array is used if the types of the input and
-					 ;; values to set are not compatible
-					 (not modify-input)
-					 ;; the array may be changed in place only if the modify-input
-					 ;; parameter is not set
-					 (not (or (eq t (element-type input))
-						  (and (not (arrayp set)) (typep set (element-type input)))
-						  (and (arrayp set) (not (eq t set-type))
-						       (typep input set-type)))))
-				     ;; if setting is not being done (i.e. values are being retrieved)
-				     ;; and only one index is being fetched, an output array isn't needed
-				     (or set (< 1 (size rmindices))
-					 (and odims (< 1 (length indices))))))
+	 (output (if (or set-by empty-output
+			 (and (or (not set)
+				  ;; an output array is used if the types of the input and
+				  ;; values to set are not compatible
+				  (not modify-input)
+				  ;; the array may be changed in place only if the modify-input
+				  ;; parameter is not set
+				  (not (or (eq t (element-type input))
+					   (and (not (arrayp set)) (typep set (element-type input)))
+					   (and (arrayp set) (not (eq t set-type))
+						(typep input set-type)))))
+			      ;; if setting is not being done (i.e. values are being retrieved)
+			      ;; and only one index is being fetched, an output array isn't needed
+			      (or set odims (< 1 (size rmindices))
+				  (and odims (< 1 (length indices))))))
 		     (make-array (if set idims odims)
 				 :element-type (if set-by t (or set-type (element-type input))))))
 	 ;; the default set-by function just returns the second argument
@@ -1431,61 +1448,63 @@
 	 (set-by (or set-by (if set (lambda (a b) (declare (ignore a)) b)))))
     ;; if multiple axes have been passed, populate the vector of row-major indices
     (if naxes (axes-to-indices indices idims rmindices))
-    (if (or set set-by)
-	(let ((pindices (if (and output indices) (make-array (size input) :initial-element 0))))
-	  ;; if an output array is being used, the processed indices vector stores the indices
-	  ;; of elements that have been processed so the ones that weren't can be assigned
-	  ;; values from the input
-	  (if indices (dotimes (o (length rmindices))
-			(let ((i (aref rmindices o)))
-			  (if (integerp i)
-			      (let ((result (disclose (apply set-by (row-major-aref input i)
-							     ;; apply the set-by function to an element
-							     ;; of the set values if they're in an array
-							     ;; or to the set value if it's scalar
-							     (or (and (arrayp set) (< 0 (rank set))
-								      (list (row-major-aref set o)))
-								 (and set (list set)))))))
-				(if output (setf (row-major-aref output i) result)
-				    (setf (row-major-aref input i) result))
-				(if pindices (setf (aref pindices i) 1)))
-			      (if (vectorp i) ;; this clause can only be reached when reach indexing
-				  ;; the set-by function is called on each pair of input
-				  ;; and replacement values
-				  (progn (setf (varef (or output input) i)
-					       (funcall set-by (varef input i)
-							(or (and (arrayp set) (row-major-aref set o))
-							    set)))
-					 (if pindices (setf (aref pindices (rmi-from-subscript-vector input i))
-							    1)))))))
-	      (if set-by-function ;; TODO: enable multithreading or not based on set-by function type
-		  (dotimes (i (size input))
-		    (setf (row-major-aref output i)
-			  (apply set-by (row-major-aref input i)
-				 (and set (list set)))))
-		  (xdotimes output (i (size input))
-		    ;; if there are no indices the set-by function is to
-		    ;; be run on all elements of the array
-		    (setf (row-major-aref output i)
-			  (apply set-by (row-major-aref input i)
-				 (and set (list set)))))))
-	  (if pindices (progn (xdotimes output (i (size input))
-				(if (= 0 (aref pindices i))
-				    (setf (row-major-aref output i)
-					  (row-major-aref input i))))
-			      output))
-	  (values set output))
-	;; if a single index is specified, from the output, just retrieve its value
-	(if (not output) (enclose (duplicate (row-major-aref input (row-major-aref rmindices 0))))
-	    (progn (xdotimes output (o (length rmindices))
-		     (let ((i (aref rmindices o)))
-		       (setf (row-major-aref output o)
-			     (if (integerp i) (row-major-aref input i)
-				 ;; the vectorp clause is only used when reach-indexing
-				 (if (vectorp i)
-				     (choose (disclose (varef input (disclose (aref i 0))))
-					     (rest (array-to-list i))))))))
-		   output)))))
+    (if empty-output output
+	(if (or set set-by)
+	    (let ((pindices (if (and output indices) (make-array (size input) :initial-element 0))))
+	      ;; if an output array is being used, the processed indices vector stores the indices
+	      ;; of elements that have been processed so the ones that weren't can be assigned
+	      ;; values from the input
+	      (if indices (dotimes (o (length rmindices))
+			    (let ((i (aref rmindices o)))
+			      (if (integerp i)
+				  (let ((result (disclose (apply set-by (row-major-aref input i)
+								 ;; apply the set-by function to an element
+								 ;; of the set values if they're in an array
+								 ;; or to the set value if it's scalar
+								 (or (and (arrayp set) (< 0 (rank set))
+									  (list (row-major-aref set o)))
+								     (and set (list set)))))))
+				    (if output (setf (row-major-aref output i) result)
+					(setf (row-major-aref input i) result))
+				    (if pindices (setf (aref pindices i) 1)))
+				  (if (vectorp i) ;; this clause can only be reached when reach indexing
+				      ;; the set-by function is called on each pair of input
+				      ;; and replacement values
+				      (progn (setf (varef (or output input) i)
+						   (funcall set-by (varef input i)
+							    (or (and (arrayp set) (row-major-aref set o))
+								set)))
+					     (if pindices (setf (aref pindices
+								      (rmi-from-subscript-vector input i))
+								1)))))))
+		  (if set-by-function ;; TODO: enable multithreading or not based on set-by function type
+		      (dotimes (i (size input))
+			(setf (row-major-aref output i)
+			      (apply set-by (row-major-aref input i)
+				     (and set (list set)))))
+		      (xdotimes output (i (size input))
+			;; if there are no indices the set-by function is to
+			;; be run on all elements of the array
+			(setf (row-major-aref output i)
+			      (apply set-by (row-major-aref input i)
+				     (and set (list set)))))))
+	      (if pindices (progn (xdotimes output (i (size input))
+				    (if (= 0 (aref pindices i))
+					(setf (row-major-aref output i)
+					      (row-major-aref input i))))
+				  output))
+	      (values set output))
+	    ;; if a single index is specified, from the output, just retrieve its value
+	    (if (not output) (enclose (duplicate (row-major-aref input (row-major-aref rmindices 0))))
+		(progn (xdotimes output (o (length rmindices))
+			 (let ((i (aref rmindices o)))
+			   (setf (row-major-aref output o)
+				 (if (integerp i) (row-major-aref input i)
+				     ;; the vectorp clause is only used when reach-indexing
+				     (if (vectorp i)
+					 (choose (disclose (varef input (disclose (aref i 0))))
+						 (rest (array-to-list i))))))))
+		       output))))))
 
 (defun mix-arrays (axis input)
   "Combine an array of nested arrays into a higher-rank array, removing a layer of nesting."
@@ -1663,6 +1682,11 @@
 				      idims)
 				    :element-type (element-type input) :displaced-to (copy-nested-array input)))
 		       ;; throw an error in the case of an invalid axis
+		       ((and (vectorp axis) (= 0 (size axis)))
+			(if (arrayp input)
+			    (make-array (append idims (list 1))	:element-type (element-type input)
+					:displaced-to (copy-nested-array input))
+			    (vector input)))
 		       ((and (vectorp axis)
 			     (< 1 (length axis))
 		     	     (or (> 0 (aref axis 0))
