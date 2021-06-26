@@ -29,6 +29,16 @@
 (defvar ∇∇ nil)
 ;; set ∇ and ∇∇ to nil; this prevents errors when they are seen in operator compositions
 
+(defvar *digit-vector* "0123456789")
+
+(defvar *alphabet-vector* "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+(defvar *idiom-native-symbols* '(⍺ ⍵ ⍶ ⍹ ⍺⍺ ⍵⍵ ∇ ∇∇ index-origin print-precision *digit-vector*
+				 *alphabet-vector* *apl-timestamp* to-output output-stream))
+
+(defvar *system-variables* '(:index-origin *index-origin* :print-precision *print-precision*
+			     :comparison-tolerance *comparison-tolerance* :division-method *division-method*))
+
 (defun make-threading-kernel-if-absent ()
   (if (not lparallel:*kernel*)
       (setq lparallel:*kernel* (setq *april-parallel-kernel*
@@ -194,7 +204,7 @@
 	      (resolve-function :monadic glyph)
 	      (resolve-function :dyadic glyph))
 	  (setf (gethash ws-symbol ws-aliases) glyph)))))
-  
+
 (defun build-populator (metadata-symbol input)
   "Generate a function that will populate array elements with an empty array prototype." 
   (if (and (= 0 (size input))
@@ -465,75 +475,75 @@
     `(lambda (,first-op ,first-axes &optional ,second-op ,second-axes)
        (declare (ignorable ,second-op ,second-axes))
        (let (,@(loop :for symbol :in operand-specs
-		:when (and (not (member symbol '(right left axes)))
-			   (or (symbolp symbol) (characterp symbol)))
-		:collect (list symbol (case symbol
-					(left-op first-op)
-					(left-axes first-axes)
-					(left-glyph (setq ignorables (cons 'left-glyph ignorables))
-						    `(or-functional-character ,first-op :fn))
-					(left-fn-monadic
-					 `(if (resolve-function :monadic ,first-op ,first-axes)
-					      `(λω (apl-call ,(or-functional-character ,first-op :fn)
-							     ,(resolve-function :monadic ,first-op ,first-axes)
-							     omega))
-					      (if (listp ,first-op)
-						  (if (eql 'function (first ,first-op))
-						      ,first-op (if (eql 'wrap-fn-ref (first ,first-op))
-								    (second ,first-op)))
-						  (if (eql '⍺⍺ ,first-op) ,first-op))))
-					(left-fn-monadic-inverse
-					 `(if (resolve-function :monadic-inverse ,first-op ,first-axes)
-					      `(λω (apl-call ,(or-functional-character ,first-op :fn)
-							     ,(resolve-function :monadic-inverse
-										,first-op ,first-axes)
-							     omega))))
-					(left-fn-dyadic
-					 `(if (resolve-function :dyadic ,first-op ,first-axes)
-					      `(λωα (apl-call ,(or-functional-character ,first-op :fn)
-							      ,(resolve-function :dyadic ,first-op ,first-axes)
-							      omega alpha))
-					      (if (listp ,first-op)
-						  (if (eql 'function (first ,first-op))
-						      ,first-op (if (eql 'wrap-fn-ref (first ,first-op))
-								    (second ,first-op)))
-						  (if (eql '⍺⍺ ,first-op) ,first-op))))
-					(left-fn-dyadic-inverse
-					 `(if (resolve-function :dyadic-inverse ,first-op)
-					      `(λωα (apl-call ,(or-functional-character ,first-op :fn)
-							      ,(getf
-								(resolve-function :dyadic-inverse
-										  ,first-op)
-								:plain)
-							      omega alpha))))
-					(left-fn-symbolic `(resolve-function :symbolic ,first-op ,first-axes))
-					(right-op second-op)
-					(right-axes second-axes)
-					(right-glyph (setq ignorables (cons 'right-glyph ignorables))
-					 `(or-functional-character ,second-op :fn))
-					(right-fn-monadic
-					 `(if (resolve-function :monadic ,second-op ,second-axes)
-					      `(λω (apl-call ,(or-functional-character ,second-op :fn)
-							     ,(resolve-function :monadic
-										,second-op ,second-axes)
-							     omega))
-					      (if (listp ,second-op)
-						  (if (eql 'function (first ,second-op))
-						      ,second-op (if (eql 'wrap-fn-ref (first ,second-op))
-								     (second ,second-op)))
-						  (if (eql '⍵⍵ ,second-op) ,second-op))))
-					(right-fn-dyadic
-					 `(if (resolve-function :dyadic ,second-op ,second-axes)
-					      `(λωα (apl-call ,(or-functional-character ,second-op :fn)
-							      ,(resolve-function :dyadic ,second-op ,second-axes)
-							      omega alpha))
-					      (if (listp ,second-op)
-						  (if (eql 'function (first ,second-op))
-						      ,second-op (if (eql 'wrap-fn-ref (first ,second-op))
-								     (second ,second-op)))
-						  (if (eql '⍵⍵ ,second-op) ,second-op))))
-					(right-fn-symbolic `(resolve-function :symbolic
-									      ,second-op ,second-axes))))))
+		  :when (and (not (member symbol '(right left axes)))
+			     (or (symbolp symbol) (characterp symbol)))
+		  :collect (list symbol (case symbol
+					  (left-op first-op)
+					  (left-axes first-axes)
+					  (left-glyph (setq ignorables (cons 'left-glyph ignorables))
+						      `(or-functional-character ,first-op :fn))
+					  (left-fn-monadic
+					   `(if (resolve-function :monadic ,first-op ,first-axes)
+					        `(λω (apl-call ,(or-functional-character ,first-op :fn)
+							       ,(resolve-function :monadic ,first-op ,first-axes)
+							       omega))
+					        (if (listp ,first-op)
+						    (if (eql 'function (first ,first-op))
+						        ,first-op (if (eql 'wrap-fn-ref (first ,first-op))
+								      (second ,first-op)))
+						    (if (eql '⍺⍺ ,first-op) ,first-op))))
+					  (left-fn-monadic-inverse
+					   `(if (resolve-function :monadic-inverse ,first-op ,first-axes)
+					        `(λω (apl-call ,(or-functional-character ,first-op :fn)
+							       ,(resolve-function :monadic-inverse
+										  ,first-op ,first-axes)
+							       omega))))
+					  (left-fn-dyadic
+					   `(if (resolve-function :dyadic ,first-op ,first-axes)
+					        `(λωα (apl-call ,(or-functional-character ,first-op :fn)
+							        ,(resolve-function :dyadic ,first-op ,first-axes)
+							        omega alpha))
+					        (if (listp ,first-op)
+						    (if (eql 'function (first ,first-op))
+						        ,first-op (if (eql 'wrap-fn-ref (first ,first-op))
+								      (second ,first-op)))
+						    (if (eql '⍺⍺ ,first-op) ,first-op))))
+					  (left-fn-dyadic-inverse
+					   `(if (resolve-function :dyadic-inverse ,first-op)
+					        `(λωα (apl-call ,(or-functional-character ,first-op :fn)
+							        ,(getf
+								  (resolve-function :dyadic-inverse
+										    ,first-op)
+								  :plain)
+							        omega alpha))))
+					  (left-fn-symbolic `(resolve-function :symbolic ,first-op ,first-axes))
+					  (right-op second-op)
+					  (right-axes second-axes)
+					  (right-glyph (setq ignorables (cons 'right-glyph ignorables))
+					               `(or-functional-character ,second-op :fn))
+					  (right-fn-monadic
+					   `(if (resolve-function :monadic ,second-op ,second-axes)
+					        `(λω (apl-call ,(or-functional-character ,second-op :fn)
+							       ,(resolve-function :monadic
+										  ,second-op ,second-axes)
+							       omega))
+					        (if (listp ,second-op)
+						    (if (eql 'function (first ,second-op))
+						        ,second-op (if (eql 'wrap-fn-ref (first ,second-op))
+								       (second ,second-op)))
+						    (if (eql '⍵⍵ ,second-op) ,second-op))))
+					  (right-fn-dyadic
+					   `(if (resolve-function :dyadic ,second-op ,second-axes)
+					        `(λωα (apl-call ,(or-functional-character ,second-op :fn)
+							        ,(resolve-function :dyadic ,second-op ,second-axes)
+							        omega alpha))
+					        (if (listp ,second-op)
+						    (if (eql 'function (first ,second-op))
+						        ,second-op (if (eql 'wrap-fn-ref (first ,second-op))
+								       (second ,second-op)))
+						    (if (eql '⍵⍵ ,second-op) ,second-op))))
+					  (right-fn-symbolic `(resolve-function :symbolic
+									        ,second-op ,second-axes))))))
 	 ,@(if ignorables `((declare (ignorable ,@ignorables))))
 	 (lambda (,@(if (member 'axes operand-specs)
 			(list 'axes)
@@ -695,11 +705,11 @@ This is a minimalistic implementation of (apl-call) that doesn't perform any fun
 It remains here as a standard against which to compare methods for composing APL functions.
 
 (defmacro apl-call (symbol function &rest arguments)
-  (declare (ignore symbol))
-  `(,(if (and (listp function)
-	      (eql 'scalar-function (first function)))
-	 'apply-scalar 'funcall)
-     ,function  ,@arguments))
+(declare (ignore symbol))
+`(,(if (and (listp function)
+(eql 'scalar-function (first function)))
+'apply-scalar 'funcall)
+,function  ,@arguments))
 |#
 
 (defmacro apl-compose (symbol &rest body)
@@ -937,7 +947,7 @@ It remains here as a standard against which to compare methods for composing APL
 	      `(lambda (,is-dyadic ,is-inverse)
 		 (declare (ignore ,is-dyadic))
 		 (if ,is-inverse ,inverted ,operand)))))))
-  
+
 (defun assign-self-refs-among-tokens (tokens function)
   "Find a list of symbols within a token list which are assigned with the [← gets] lexical function. Used to find lists of variables to hoist in lambda forms."
   (loop :for token :in tokens :for tx :from 0
@@ -980,7 +990,10 @@ It remains here as a standard against which to compare methods for composing APL
   (match form
     ((list* 'apl-compose '⍣ 'operate-to-power degree rest)
      ;; invert a [⍣ power] operation - all that needs be done is negate the right operand
-     `(apl-compose ⍣ operate-to-power (- ,degree) ,@rest))
+     (let ((inverse-degree `(lambda () (- ,(third degree)))))
+       ;; the degree is manifested by a function,
+       ;; so a function generating the inverse of that degree is built
+       `(apl-compose ⍣ operate-to-power ,inverse-degree ,@rest)))
     ((list* 'apl-compose '∘ 'operate-composed
 	    (list 'apl-compose '\. 'lambda '(o a)
 		  (list 'array-outer-product 'o 'a (guard opfn (and (eql 'λωα (first opfn))
@@ -999,7 +1012,7 @@ It remains here as a standard against which to compare methods for composing APL
      ;; invert a left-composition of an [∘. outer product] operation
      `(apl-compose ∘ operate-composed ,op1 nil nil :inverted-op nil
 		     (λωα (inverse-outer-product alpha (λωα ,(invert-function (second opfn)))
-						omega))
+						 omega))
 		     ,@rest))
     ((list* 'apl-compose '∘ 'operate-composed (guard op1 (not (characterp op1)))
 	    nil nil op2-sym _ _ remaining)
@@ -1079,8 +1092,8 @@ It remains here as a standard against which to compare methods for composing APL
 						   :dyadic-inverse (aref (string fn-glyph) 0))))
 				`(apl-compose ⍨ lambda ,args
 						(funcall (λω (apl-call ,fn-glyph
-									,(getf dyinv-forms :commuted)
-									omega alpha))
+								       ,(getf dyinv-forms :commuted)
+								       omega alpha))
 							 omega)))))
     	 (error "Composition with ⍨ not invertable.")))
     ((list (guard first (member first '(λω λωα))) second)

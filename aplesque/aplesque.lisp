@@ -393,7 +393,7 @@
 								     axes is-boolean is-non-scalar-function)
 						       (funcall function oscalar))))
 	      (xdotimes output (i (size omega))
-		 (setf (row-major-aref output i) (apply-scalar function (row-major-aref omega i)))))
+		(setf (row-major-aref output i) (apply-scalar function (row-major-aref omega i)))))
 	  (if (and oscalar ascalar)
 	      ;; if both arguments are scalar or 1-element, return the output of the function on both,
 	      ;; remembering to promote the output to the highest rank of the input, either 0 or 1 if not scalar
@@ -409,7 +409,7 @@
 		      ;; map the function over identically-shaped arrays
 		      (if (and is-non-scalar-function (or oscalar ascalar))
 			  (setq output (funcall function omega alpha))
-			  (dotimes (i (size output))
+			  (xdotimes output (i (size output))
 			    (setf (row-major-aref output i)
 				  (apply-scalar function (or oscalar (disclose (row-major-aref omega i)))
 						(or ascalar (disclose (row-major-aref alpha i)))
@@ -644,33 +644,62 @@
 
 (defun laminate (a1 a2 axis)
   "Join the two arrays along a new axis inserted before the specified axis, the new axis having a length of 2."
-  (flet ((rotate-right (n l)
-	   "Rotate an array n units to the right."
-	   (funcall (lambda (n l) (append (nthcdr n l) (butlast l (- (length l) n))))
-		    (- (length l) n) l)))
-    (let* ((permute-dims (alexandria:iota (1+ (rank a1))))
-	   (pa1 (if (not (is-unitary a1))
-		    (aops:permute (rotate-right axis permute-dims)
-				  (array-promote a1))))
-	   (pa2 (if (not (is-unitary a2))
-		    (aops:permute (rotate-right axis permute-dims)
-				  (array-promote a2)))))
-      ;; a 1-element array argument to laminate is scaled to
-      ;; match the other array's dimensions
-      (catenate (or pa1 a1) (or pa2 a2)	axis))))
+  (let* ((irank (rank a1))
+	 (orank (1+ irank))
+	 (ipdims (coerce (loop :for i :below irank :collect (mod (- i axis) irank)) 'vector))
+	 (opdims (coerce (loop :for i :below orank :collect (mod (+ i axis) orank)) 'vector)))
+    ;; a 1-element array argument to laminate is scaled to
+    ;; match the other array's dimensions
+    (permute-axes (catenate (if (is-unitary a1) a1 (array-promote (permute-axes a1 ipdims)))
+			    (if (is-unitary a2) a2 (array-promote (permute-axes a2 ipdims)))
+			    0)
+		  opdims)))
 
 (defun expand (degrees input axis &key (compress-mode) (populator))
   "Expand an input array as per a vector of degrees, with the option to manifest zero values in the degree array as zeroes in the output in place of the original input values or to omit the corresponding values altogether if the :compress-mode option is used."
   (cond ((= 0 (size input))
-	 (if compress-mode (error "An empty array cannot be compressed.")
-	     (if (or (arrayp degrees)
-		     (not (> 0 degrees)))
-		 (error "An empty array can only be expanded to a single negative degree.")
-		 (let ((output (make-array (abs degrees) :element-type (element-type input)
-					   :initial-element (if (not populator) (apl-array-prototype input)))))
-		   (if populator (xdotimes output (i (length output)) (setf (row-major-aref output i)
-									    (funcall populator))))
-		   output))))
+         (let ((idims (dims input)))
+	   (if compress-mode
+               (if (> axis (1- (rank input)))
+                   (error "This array does not have an axis ~a." axis)
+                   (if (or (integerp degrees) (= 1 (length degrees)))
+                       (make-array (loop :for d :in idims :for dx :from 0
+                                      :collect (if (= dx axis) (* d (disclose degrees)) d)))
+                       (if (= 0 (length degrees))
+                           (make-array (loop :for d :in idims :for dx :from 0
+                                          :collect (if (= dx axis) 0 d)))
+                           (if (/= (length degrees) (nth axis idims))
+                               (error "Compression degrees must equal size of array in dimension to compress.")
+                               (let ((output-size (loop :for d :across degrees :summing d)))
+                                 ;; TODO: use array prototype
+                                 (let ((output (make-array (loop :for d :in idims :for dx :from 0
+                                                              :collect (if (= dx axis) output-size d))
+                                                           :element-type (element-type input)
+                                                           :initial-element (if (not populator)
+                                                                                (apl-array-prototype input)))))
+                                   (if populator (xdotimes output (i (length output))
+                                                   (setf (row-major-aref output i) (funcall populator))))
+                                   output))))))
+	       (if (or (integerp degrees) (= 1 (length degrees)))
+                   (let ((output (make-array (abs (disclose-unitary degrees)) :element-type (element-type input)
+					     :initial-element (if (not populator)
+                                                                  (apl-array-prototype input)))))
+		     (if populator (xdotimes output (i (length output))
+                                     (setf (row-major-aref output i) (funcall populator))))
+		     output)
+                   (if (and (loop :for d :across degrees :always (= 0 d))
+                            (= 0 (nth axis idims)))
+                       (if (= 1 (rank input))
+                           (copy-array degrees)
+                           (let ((output (make-array (loop :for d :in idims :for dx :from 0
+                                                        :collect (if (= dx axis) (length degrees) d))
+                                                     :element-type (element-type input)
+                                                     :initial-element (if (not populator)
+                                                                          (apl-array-prototype input)))))
+                             (if populator (xdotimes output (i (length output))
+                                             (setf (row-major-aref output i) (funcall populator))))
+                             output))
+		       (error "An empty array can only be expanded to a single negative degree or to any number of empty dimensions."))))))
 	((and (or (not (arrayp input))
 		  (= 0 (rank input)))
 	      (not (arrayp degrees)))
@@ -834,8 +863,8 @@
 		     (and (= 0 pos) (/= 0 current-interval)))
 	   :do (setq r-indices (cons p r-indices)
 		     r-intervals (if (rest r-indices) (cons interval-size r-intervals)))
-	   (incf partitions (if (/= 0 pos) 1 0))
-	   (setq current-interval pos interval-size 0))
+	     (incf partitions (if (/= 0 pos) 1 0))
+	     (setq current-interval pos interval-size 0))
 	;; add the last entry to the intervals provided the positions list didn't have a 0 value at the end
 	(if (/= 0 (aref positions (1- (length positions))))
 	    (setq r-intervals (cons (- (length positions) (first r-indices))
@@ -944,15 +973,15 @@
                        ((= n 2) (* (incf NN 2) (incf NN 2)))
                        (t (* (prod (- n m)) (prod m)))))))
       (loop :while (/= h n)
-            :do (incf shift h)
-                (setf h (ash n (- log2n)))
-                (decf log2n)
-                (setf len high)
-                (setf high (if (oddp h) h (1- h)))
-                (setf len (ash (- high len) -1))
-                (cond ((> len 0)
-                       (setf p (* p (prod len)))
-                       (setf r (* r p)))))
+         :do (incf shift h)
+           (setf h (ash n (- log2n)))
+           (decf log2n)
+           (setf len high)
+           (setf high (if (oddp h) h (1- h)))
+           (setf len (ash (- high len) -1))
+           (cond ((> len 0)
+                  (setf p (* p (prod len)))
+                  (setf r (* r p)))))
       (ash r shift))))
 
 (defun gamma (c)
@@ -1071,7 +1100,7 @@
 	 (output (make-array (append (butlast adims) (rest odims)))))
     ;; TODO: can't parallelize yet
     ;; (print (list :oo alpha omega output))
-    (dotimes (x (size output))
+    (dotimes (x (size output)) ;; xdo
       (let* ((avix (floor x ovectors))
 	     (ovix (mod x ovectors))
 	     (adisp (if adims (make-array asegment :displaced-to alpha :element-type (element-type alpha)
@@ -1191,10 +1220,10 @@
 		   (xdotimes graded-array (i input-length) (setf (aref graded-array i) (+ i count-from)))
 		   (xdotimes vector (i (length vector))
 		     (setf (aref vector i) (if (and (arrayp (aref input i))
-						      (< 1 (rank (aref input i))))
-						 (grade (aref input i)
-							count-from compare-by)
-						 (aref input i))))
+						    (< 1 (rank (aref input i))))
+					       (grade (aref input i)
+						      count-from compare-by)
+					       (aref input i))))
 		   (stable-sort graded-array (lambda (1st 2nd)
 					       (let ((val1 (aref vector (- 1st count-from)))
 						     (val2 (aref vector (- 2nd count-from))))
@@ -1378,8 +1407,8 @@
   (let* ((empty-output) (idims (dims input)) (sdims (if set (dims set)))
 	 ;; contents removed from 1-size arrays in the indices
 	 (indices (loop :for i :in indices :collect ;; (if (not (and (arrayp i) (= 1 (size i))))
-						    ;; 	i (row-major-aref i 0))
-		       i))
+		     ;; 	i (row-major-aref i 0))
+		     i))
 	 (index1 (first indices)) (naxes (< 1 (length indices)))
 	 (odims (if naxes (loop :for i :in indices :for d :in idims :for s :from 0
 			     :append (let ((len (or (and (null i) (list d))
@@ -1478,7 +1507,7 @@
 								      (rmi-from-subscript-vector input i))
 								1)))))))
 		  (if set-by-function ;; TODO: enable multithreading or not based on set-by function type
-		      (dotimes (i (size input))
+		      (dotimes (i (size input)) ;; xdo
 			(setf (row-major-aref output i)
 			      (apply set-by (row-major-aref input i)
 				     (and set (list set)))))
@@ -1741,10 +1770,10 @@
 		   (setf (row-major-aref output o) (make-array (nth axis (dims input))
 							       :element-type (element-type input))))
 		 (across input (lambda (elem coords)
-				  (let ((out-sub-array (loop :for c :in coords :for cx :from 0
-							  :when (/= cx axis) :collect c))
-					(out-coords (nth axis coords)))
-				    (setf (aref (apply #'aref output out-sub-array) out-coords) elem))))
+				 (let ((out-sub-array (loop :for c :in coords :for cx :from 0
+							 :when (/= cx axis) :collect c))
+				       (out-coords (nth axis coords)))
+				   (setf (aref (apply #'aref output out-sub-array) out-coords) elem))))
 		 output)))
 	  ((not (apply #'< (array-to-list axes)))
 	   (error "Elements in an axis argument to the enclose function must be in ascending order."))
@@ -1841,7 +1870,7 @@
 					    (if (not (member i positions))
 					     	(setf positions (cons i positions)
 						      idims-reduced (cons id idims-reduced)))
-					    ;; collect possible diagonal indices into diagonal list
+					  ;; collect possible diagonal indices into diagonal list
 					    (if (assoc i diagonals)
 						(setf (rest (assoc i diagonals))
 						      (cons ix (rest (assoc i diagonals))))
@@ -2126,7 +2155,7 @@
 				     (length (nth i strings))))
 			   (or (nth i segments) 0)))))))
 
-(defun array-impress (input &key (prepend) (append) (collate) (in-collated) (format) (segment))
+(defun array-impress (input &key (prepend) (append) (collate) (unpadded) (format) (segment))
   "Render the contents of an array into a character matrix or, if the collate option is taken, an array with sub-matrices of characters."
   (cond ((or (functionp input) (= 0 (size input)))
 	 (concatenate 'string (list #\Newline)))
@@ -2139,8 +2168,8 @@
 	;; each layer of 0-rank enclosure adds 1 space of indentation
 	((= 0 (rank input))
 	 (array-impress (aref input) :format format :segment segment :append append
-			:in-collated collate :prepend (if (eq prepend t)
-							  t (1+ (or prepend 0)))))
+			:unpadded collate :prepend (if (eq prepend t)
+						       t (1+ (or prepend 0)))))
 	(t (let* ((idims (dims input))
 		  ;; the x-offset and y-offset for each column and row; each array has an extra element to
 		  ;; represent the total width and height of the output array
@@ -2253,7 +2282,7 @@
 										  (* current dim))))))
 					     ;; find the total number of empty lines preceding this row by
 					     ;; encoding the coordinates excepting the last two with a series
-				     ;; of number bases found by multiplying each dimension going
+				             ;; of number bases found by multiplying each dimension going
 					     ;; backwards excepting the last 2 by the previous base and adding 1
 					     empty-rows
 					     (reduce
@@ -2341,7 +2370,7 @@
 							       (aref x-offsets (1- (length x-offsets))))))
 					      :element-type 'character :initial-element output-default-char)
 				  (make-array (list (aref y-offsets (1- (length y-offsets)))
-						    (+ (if (or collate in-collated) 0 1)
+						    (+ (if (or collate unpadded) 0 1)
 						       (if (and prepend (not (eq t prepend))) prepend 0)
 						       (aref x-offsets (1- (length x-offsets)))))
 					      :element-type 'character :initial-element output-default-char))))
@@ -2379,7 +2408,7 @@
 					       (if to-collate
 						   (setf (apply #'aref output (append (butlast coords 1)
 										      (list x-coord)))
-								 element)
+							 element)
 						   (setf (aref output (+ (aref y-offsets row)
 									 (if (not (second ecoords))
 									     0 (first ecoords)))
@@ -2404,7 +2433,7 @@
 						       (declare (ignore elem))
 						       (setf (apply #'aref output coords) append)))
 			   (if append (dotimes (row (first (dims output)))
-					 (setf (aref output row (1- last-dim)) append))))))
+					(setf (aref output row (1- last-dim)) append))))))
 		 output))))))
 
 (defmacro matrix-print (input &rest options)

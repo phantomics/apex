@@ -71,7 +71,7 @@ factorial ← { ⍺←1 ⋄ $[⍵=0;⍺;(⍺×⍵)∇ ⍵-1] }    ⍝ Tail recur
 
 ⍝ From http://dfns.dyalog.com/c_fibonacci.htm
 
-fibonacci ← {  ⍝ Tail-recursive Fibonacci.
+fibonacci ← {                                ⍝ Tail-recursive Fibonacci.
   ⍺←0 1 ⋄ $[⍵=0;⍬⍴⍺;(1↓⍺,+/⍺)∇ ⍵-1]
 }
 
@@ -106,23 +106,25 @@ lcm ← { ⍺×⍵÷⍺ gcd ⍵ }                        ⍝ Least common multip
 
 ⍝ From http://dfns.dyalog.com/c_k6174.htm
 
+kdeco←(4/10)∘⊤⍣¯1 ⍝ TODO: figure out why this is needed
+
 k6174 ← {                                    ⍝ Kaprekar's operation.
   enco←(4/10)∘⊤                              ⍝ 4-digit encode.
-  deco←kenco⍣¯1                              ⍝   and decode.
+  deco←enco⍣¯1                               ⍝   and decode.
   $[1=⍴∪enco ⍵;'error';                      ⍝ all digits the same: no go.
     ⍬{                                       ⍝ starting with null sequence.
       $[⍵=⊃⌽⍺;⍺;                             ⍝ repeated items: done.
         v←{⍵[⍒⍵]}enco ⍵                      ⍝ digits in descending order.
-        (⍺,⍵)∇(deco v)-deco⌽v                ⍝ smaller to larger difference.
+        (⍺,⍵)∇(kdeco v)-kdeco⌽v              ⍝ smaller to larger difference.
        ]
      }⍵                                      ⍝ :: [#] ∇ # → [#]
    ]
 }
-
+  
 ⍝ From http://dfns.dyalog.com/c_int.htm
 
 ⍝ int ← { ↑⍵{(⍺|⍺⍺+⍵)-⍵}/2*⍺-0 1 }             ⍝ Signed from unsigned integer.
-⍝⍝ Need int tests - to function needs to work
+⍝ bug: not composing with ⍵ before reduce
   
 ⍝ From http://dfns.dyalog.com/c_uns.htm
   
@@ -172,7 +174,7 @@ path ← {                                     ⍝ Shortest path from/to ⍵ in 
         (∪wave) ∇ back@wave⊢⍵]]              ⍝ advanced wave front
   }¯2+(⍳⍴⍺)∊fm                               ⍝ null spanning tree
 }
-  
+
 stamps ← {                                   ⍝ Postage stamps to the value of ⍵.
   ⍺←1 5 6 10 26 39 43                        ⍝ Default UK stamp denominations.
   graph←⍺{⍵∘∩¨⍵+⊂⍺}⍳⍵+|⌊/⍺                   ⍝ values: 0 ·· ⍵.
@@ -190,16 +192,6 @@ sieve ← {                                    ⍝ Sieve of Eratosthenes.
     (⍺,nxt)∇ msk/⍵                           ⍝ Sieve remainder.
    ]
 }
-
-⍝ huiSieve ← { ⎕IO←0
-⍝   b←⍵⍴{∧⌿↑(×/⍵)⍴¨~⍵↑¨1}2 3 5
-⍝   b[⍳6⌊⍵]←(6⌊⍵)⍴0 0 1 1 0 1
-⍝   $[49≥⍵;b;
-⍝     p←3↓⍸∇⌈⍵*0.5
-⍝     m←1+⌊(⍵-1+p×p)÷2×p
-⍝     b⊣p{b[⍺×⍺+2×⍳⍵]←0}¨m
-⍝    ]
-⍝ }
 
 ⍝ From http://dfns.dyalog.com/c_to.htm
 
@@ -247,7 +239,6 @@ det ← { ⎕IO←0                                ⍝ Determinant of square mat
 
 ⍝ From http://dfns.dyalog.com/c_kcell.htm
 
-⍝ TODO: Bug with sequence
 kcell ← {                                    ⍝ Relationship between point and k-cell.
   ⍺←(≢⍵)/2 1⍴0 1                             ⍝ Default is unit k-cell.
   b←,[(2=⍴⍴⍺)/⎕IO]⍺                          ⍝ Bounds of k-cell.
@@ -322,7 +313,7 @@ roots ← {                                    ⍝ Roots of quadratic.
   (-b+¯1 1×d*0.5)÷2×a                        ⍝ both roots.
 }
 
-  
+
 ⍝⍝ Complex number processing
   
 ⍝ From http://dfns.dyalog.com/c_polar.htm
@@ -330,7 +321,7 @@ roots ← {                                    ⍝ Roots of quadratic.
 polar←{                                      ⍝ Polar from/to cartesian coordinates.
   lam←,[⎕IO-÷2]                              ⍝ laminate along new first axis.
   pol_car←{                                  ⍝ polar from cartesian (default).
-  radius←{(+⌿⍵*2)*0.5}                       ⍝ radius (pythagorus).
+    radius←{(+⌿⍵*2)*0.5}                     ⍝ radius (pythagorus).
     angle←{                                  ⍝ phase angle.
       x y←⊂⍤¯1⊢⍵                             ⍝ x and y coordinates.
       x0 xn←1 0=⊂0=x                         ⍝ points on/off y axis.
@@ -360,3 +351,25 @@ rnd ← { (10*-⍺)×⌊0.5+⍵×10*⍺ }
 
 poly ← { 2 1∘.○(○2÷⍵)×(⍳⍵)-⍳1 }
 
+⍝ From http://dfns.dyalog.com/c_xtimes.htm
+
+xtimes ← { ⎕IO←0                             ⍝ Fast multi-digit product using FFT.
+  xroots    ← {×\1,1↓(⍵÷2)⍴¯1*2÷⍵}
+  cube      ← {⍵⍴⍨2⍴⍨⌊2⍟⍴⍵}
+  extend    ← {(2*⌈2⍟¯1+(⍴⍺)+⍴⍵)↑¨⍺ ⍵}
+  floop     ← {(⊣/⍺)∇⍣(×m)⊢(+⌿⍵),[m-0.5]⍺×[⍳m←≢⍴⍺]-⌿⍵}
+  FFT       ← {,(cube xroots⍴⍵)floop cube ⍵}
+  iFFT      ← {(⍴⍵)÷⍨,(cube+xroots⍴⍵)floop cube ⍵}
+  rconvolve ← {(¯1+(⍴⍺)+⍴⍵)↑iFFT⊃×/FFT¨⍺ extend ⍵}
+  carry     ← {1↓+⌿1 0⌽0,0 10⊤⍵}
+  (+/∧\0=t)↓t←carry⍣≡0,⌊0.5+9○⍺ rconvolve ⍵
+}
+
+convolve ← { ⎕IO←0 ⋄ +⌿(-⍳⍴⍺)⌽⍺∘.×⍵,0×1↓⍺ }
+
+⍝ From http://dfns.dyalog.com/c_xpower.htm
+
+⍝ xpower ← {                                   ⍝ Fast multi-digit power using FFT.
+⍝   xt←{(0,⍺)xtimes 0,⍵} ⋄ b←⌽2⊥⍣¯1+10⊥⍵       ⍝ boolean showing which powers needed
+⍝   ↑,/xt/b/{xt⍨⍵}\(⊂,10⊥⍣¯1+⍺)⍴⍨⍴b
+⍝ }

@@ -259,7 +259,7 @@
 			      (loop :for (item-name item-value) :on source-items :while item-value
 				 :do (if (evenp pair-index)
 					 (setf (getf osection item-name) item-value))
-				 (incf pair-index))
+				   (incf pair-index))
 			      (cons (first section)
 				    osection)))))
     (loop :for section :in source :when (not (assoc (first section) target))
@@ -306,9 +306,9 @@
 	     (build-lexicon () `(loop :for lexicon :in (getf (rest this-lex) :lexicons)
 				   :do (if (not (getf lexicon-data lexicon))
 					   (setf (getf lexicon-data lexicon) nil))
-				   (if (not (member char (getf lexicon-data lexicon)))
-				       (setf (getf lexicon-data lexicon)
-					     (cons char (getf lexicon-data lexicon)))))))
+				     (if (not (member char (getf lexicon-data lexicon)))
+				         (setf (getf lexicon-data lexicon)
+					       (cons char (getf lexicon-data lexicon)))))))
     (let* ((symbol-string (string-upcase symbol))
 	   (idiom-symbol (intern (format nil "*~a-IDIOM*" symbol-string)
 				 (symbol-package symbol)))
@@ -546,7 +546,7 @@
 			;; this macro creates a context enclosure within which evaluations have a default
 			;; context; use this to evaluate many times with the same (with) expression
 			(let ((,ws-fullname (concatenate 'string ,(string-upcase symbol)
-							"-WORKSPACE-" (string-upcase ,ws-name))))
+							 "-WORKSPACE-" (string-upcase ,ws-name))))
 			  `(if (not (find-package ,,ws-fullname))
 			       (progn (make-package ,,ws-fullname)
 			    	      (proclaim (list 'special (intern "*SYSTEM*" ,,ws-fullname)
@@ -575,8 +575,8 @@
 			  `(if (find-package ,,ws-fullname)
 			       (progn (delete-package ,,ws-fullname)
 			       	      (,',(intern (concatenate 'string symbol-string "-CREATE-WORKSPACE")
-			       			(symbol-package symbol))
-			       		 ,,ws-name)
+			       			  (symbol-package symbol))
+			       		  ,,ws-name)
 			       	      ,(format nil "The workspace ｢~a｣ has been cleared." ,ws-name))
 			       (progn (,',(intern (concatenate 'string symbol-string "-CREATE-WORKSPACE")
 			       			  (symbol-package symbol))
@@ -607,14 +607,14 @@
 		(loop :for set-values :in sets
 		   :do (destructuring-bind (set-name set) set-values
 			 (setq output (if (= 0 set) output
-					(format nil "~a~a~a ~a~a"
-						output (if (and (< 0 items)
-								(or (= set-index (1- (length sets)))
-								    (= 0 (loop :for sx :from (1+ set-index)
-									    :to (1- (length sets))
-									    :summing (second (nth sx sets))))))
-							   " and " (if (< 0 items) ", " ""))
-						set set-name (if (< 1 set) "s" "")))
+					  (format nil "~a~a~a ~a~a"
+						  output (if (and (< 0 items)
+								  (or (= set-index (1- (length sets)))
+								      (= 0 (loop :for sx :from (1+ set-index)
+									      :to (1- (length sets))
+									      :summing (second (nth sx sets))))))
+							     " and " (if (< 0 items) ", " ""))
+						  set set-name (if (< 1 set) "s" "")))
 			       set-index (1+ set-index)
 			       items (+ set items))))
 		(princ (format nil "~%~a idiom ｢~a｣ with ~a.~%~%" ,(if extension "Extended" "Specified")
@@ -731,7 +731,7 @@
 		       (progn (if if-confirmed (funcall if-confirmed))
 			      enclosed)
 		       (error "No closing ~a found for opening ~a."
-				       (aref boundary-chars 1) (aref boundary-chars 0))))))
+			      (aref boundary-chars 1) (aref boundary-chars 0))))))
 	     (=vex-errant-closing-character (boundary-chars)
 	       (let ((errant-char) (matching-char)
 		     (chars-count (/ (length boundary-chars) 2)))
@@ -906,7 +906,7 @@
 						 (composer idiom space item nil sub-props))
 			    precedent properties pre-props)
 		 ;; (print (list :pattern (getf pattern :name) precedent tokens properties))
-	       (if new-processed (setq processed new-processed properties new-props tokens remaining))))
+	         (if new-processed (setq processed new-processed properties new-props tokens remaining))))
 	(if special-params (setf (getf properties :special) special-params))
 	(if processed (composer idiom space tokens processed properties pre-props)
 	    (values precedent properties tokens)))))
@@ -939,7 +939,7 @@
 	      `(if (and (listp ,',item-sym) (eql :axes (first ,',item-sym)))
 		   (setq ,,symbol (list (loop :for ,',axis :in (rest ,',item-sym)
 					   :collect (funcall (lambda (item)
-							        (if (< 1 (length item))
+							       (if (< 1 (length item))
 							      	   (cons 'progn item)
 							      	   (first item)))
 							     (loop :for ,',subax :in ,',axis
@@ -961,19 +961,19 @@ These are examples of the output of the three macro-builders above.
 (defmacro assign-axes (symbol process item items rest-items)
   (let ((axis (gensym)))
     `(if (and (listp ,item) (eql :axes (first ,item)))
-	 (setq ,symbol (list (loop :for ,axis :in (rest ,item) :collect (funcall ,process ,axis)))
-    	       ,items ,rest-items))))
+         (setq ,symbol (list (loop :for ,axis :in (rest ,item) :collect (funcall ,process ,axis)))
+               ,items ,rest-items))))
 
 (defmacro assign-element (symbol-form symbol-props function process properties space item items rest-items)
   (let ((form-out (gensym)) (form-properties (gensym)))
     `(multiple-value-bind (,form-out ,form-properties)
-	 (,function ,item ,properties ,process idiom ,space)
+         (,function ,item ,properties ,process idiom ,space)
        (if ,form-out (setq ,symbol-form ,form-out ,symbol-props ,form-properties ,items ,rest-items)))))
 
 (defmacro assign-subprocessed (symbol-form symbol-props process properties item items rest-items)
   (let ((form-out (gensym)) (form-properties (gensym)) (remaining (gensym)))
     `(multiple-value-bind (,form-out ,form-properties ,remaining)
-	 (funcall ,process ,items ,properties)
+         (funcall ,process ,items ,properties)
        (setq ,symbol-form ,form-out ,symbol-props ,form-properties ,items ,remaining))))
 
 |#
@@ -994,8 +994,8 @@ These are examples of the output of the three macro-builders above.
   "Compile a set of expressions, optionally drawing external variables into the program and setting configuration parameters for the system."
   (let* ((state (rest (assoc :state options)))
 	 (space (concatenate 'string (string-upcase (idiom-name idiom))
-			    "-WORKSPACE-" (if (not (second (assoc :space options)))
-					      "COMMON" (string-upcase (second (assoc :space options))))))
+			     "-WORKSPACE-" (if (not (second (assoc :space options)))
+					       "COMMON" (string-upcase (second (assoc :space options))))))
 	 (state-to-use) (system-to-use))
     (labels ((assign-from (source dest)
 	       (if (not source)
@@ -1081,5 +1081,5 @@ These are examples of the output of the three macro-builders above.
 								 (intern (lisp->camel-case return-var) space))
 							       output-vars)))))
 		       (loop :for (key value) :on (getf (idiom-system idiom) :workspace-defaults)
-			    :by #'cddr :collect (string-upcase key))
+			  :by #'cddr :collect (string-upcase key))
 		       options system-vars vars-declared stored-refs space)))))))

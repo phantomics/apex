@@ -12,11 +12,11 @@
   (rank 0 :type 8)
   (dimensions #() :type (simple-array (unsigned-byte 32) (rank)))
   (data #() :type (eval (case type (#x08 `(simple-array (unsigned-byte 8) (,(april-c "{×/⍵}" dimensions))))
-  			  (#x09 `(simple-array (signed-byte 8) (,(april-c "{×/⍵}" dimensions))))
-  			  (#x0b `(simple-array (signed-byte 16) (,(april-c "{×/⍵}" dimensions))))
-  			  (#x0c `(simple-array (signed-byte 32) (,(april-c "{×/⍵}" dimensions))))
-  			  (#x0d `(simple-array single-float (,(april-c "{×/⍵}" dimensions))))
-  			  (#x0e `(simple-array double-float (,(april-c "{×/⍵}" dimensions))))))))
+  			      (#x09 `(simple-array (signed-byte 8) (,(april-c "{×/⍵}" dimensions))))
+  			      (#x0b `(simple-array (signed-byte 16) (,(april-c "{×/⍵}" dimensions))))
+  			      (#x0c `(simple-array (signed-byte 32) (,(april-c "{×/⍵}" dimensions))))
+  			      (#x0d `(simple-array single-float (,(april-c "{×/⍵}" dimensions))))
+  			      (#x0e `(simple-array double-float (,(april-c "{×/⍵}" dimensions))))))))
 
 (defun idx-file-to-array (file-path)
   "Load the contents of an .idx file into an array."

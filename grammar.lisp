@@ -13,7 +13,6 @@
 (defun process-value (this-item properties process idiom space)
   ;; TODO: add a passthrough value mode for symbols that are being assigned!
   ;; this is the only way to get them assignable after the first time
-  ;; (print (list :it this-item properties))
   (cond ((and (listp this-item)
 	      (not (member (first this-item) '(:fn :op :axes))))
 	 ;; if the item is a closure, evaluate it and return the result
@@ -142,9 +141,10 @@
 					   (remove-duplicates
 					    (getf (getf properties :special) :lexvar-symbols))
 					   :fn-assigned-symbols (getf (getf properties :special)
-								      :fn-assigned-symbols)))))
+								      :fn-assigned-symbols)
+                                           :from-outside-functional-expression t))))
 		(multiple-value-bind (output out-properties)
-	    	    (funcall process this-item)
+	    	    (funcall process this-item sub-props)
 	    	  (if (eq :function (first (getf out-properties :type)))
 	    	      (progn (if (not (member :enclosed (getf out-properties :type)))
 				 (setf (getf out-properties :type)
@@ -170,9 +170,11 @@
 			 (list :type '(:function :lexical-function))))
 		((member (intern (string-upcase this-item) *package-name-string*)
 			 (rest (assoc :function (idiom-symbols idiom))))
-		 (values (list 'function (getf (rest (assoc :function (idiom-symbols idiom)))
-					       (intern (string-upcase this-item)
-						       *package-name-string*)))
+		 (values (let ((idiom-function-object (getf (rest (assoc :function (idiom-symbols idiom)))
+					                    (intern (string-upcase this-item)
+						                    *package-name-string*))))
+                           (if (listp idiom-function-object)
+                               idiom-function-object (list 'function idiom-function-object)))
 			 (list :type '(:function :referenced))))
 		(t (values nil nil)))
 	  (values nil nil))))
@@ -335,6 +337,12 @@
 			      (not (member :overloaded-operator (getf function-props :type))))
 			 (let ((next (if items (multiple-value-list (funcall process items)))))
 			   (and (not (member :function (getf (second next) :type)))
+				(not (and (listp (first next))
+					  (eql 'inws (caar next))
+					  (symbolp (cadar next))
+					  (member (cadar next)
+						  (getf (getf (first (last preceding-properties)) :special)
+							:fn-assigned-symbols))))
 				(not (third next)))))))
     (if (and function-form is-function)
 	(values (if (or (not axes) (of-lexicon idiom :functions function-form))
@@ -365,8 +373,8 @@
        (if operator-form (progn (assign-axes operand-axes process)
 				(assign-subprocessed operand-form operand-props
 		 				     `(:special (:omit (:value-assignment :function-assignment
-		 							:operation :operator-assignment
-									:train-composition)
+		 							                  :operation :operator-assignment
+									                  :train-composition)
 								       ,@include-lexvar-symbols
 								       :fn-assigned-symbols
 								       ,(getf (getf (first
@@ -737,8 +745,8 @@
      (if (eq :function (first preceding-type))
 	 (progn (assign-subprocessed center center-props
 				     `(:special (:omit (:value-assignment :function-assignment
-							:train-composition)
-						 ,@include-lexvar-symbols)))
+							                  :train-composition)
+						       ,@include-lexvar-symbols)))
 		(setq is-center-function (eq :function (first (getf center-props :type))))
 		(if is-center-function
 		    (assign-subprocessed left left-props
@@ -775,10 +783,12 @@
 	    ;; train composition is only valid when there is only one function in the precedent
 	    ;; or when continuing a train composition as for (×,-,÷)5; remember that operator-composed
 	    ;; functions are also valid as preceding functions, as with (1+-∘÷)
-	    (if (and center (or (= 1 (length preceding-properties))
-				(and (member :function (getf (first preceding-properties) :type))
+	    (if (and center (or (and (= 2 (length preceding-properties))
+                                     (getf (getf (second preceding-properties) :special)
+                                           :from-outside-functional-expression))
+                                (and (member :function (getf (first preceding-properties) :type))
 				     (member :operator-composed (getf (first preceding-properties) :type)))
- 				(member :train-fork-composition (getf (first preceding-properties) :type))))
+                                (member :train-fork-composition (getf (first preceding-properties) :type))))
  		;; functions are resolved here, failure to resolve indicates a value in the train
  		(let ((right-fn-monadic (if (and (listp right) (eql 'function (first right)))
  					    right (resolve-function :monadic right)))
@@ -851,7 +861,10 @@
 							    (apl-call :fn ,(resolve-function
 									    :monadic left-operand)
 								      ,omega)))
-						     left-operand))
+                                                     ;; handle ∇ function self-reference
+						     (if (and (symbolp left-operand)
+                                                              (eql '∇ left-operand))
+                                                         '#'∇self left-operand)))
 			       ,precedent ,@(if left-value (list left-value))))
 		'(:type (:array :evaluated)) items))))
 
@@ -980,7 +993,8 @@
 						  (eql 'function (first fn-element))))
 					 fn-element (or (resolve-function (if value :dyadic :monadic)
 									  (insym fn-element))
-							(resolve-function :symbolic fn-element))))
+							(resolve-function :symbolic fn-element)
+                                                        fn-element)))
 			 ;; the ∇ symbol resolving to :self-reference generates the #'∇self function used
 			 ;; as a self-reference by lambdas invoked through the (alambda) macro
 			 (fn-content (if (not (eql '∇ fn-content))

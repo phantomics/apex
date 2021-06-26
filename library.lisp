@@ -22,6 +22,58 @@
 		(if (= alpha omega)
 		    vector (make-array alpha :displaced-to vector :element-type (element-type vector)))))))))
 
+(defun apl-divide (method)
+  "Generate a division function according to the [⎕DIV division method] in use."
+  (lambda (omega &optional alpha)
+    (if (and alpha (= 0 omega) (= 0 alpha))
+	(if (= 0 method) 1 0)
+	(if alpha (/ alpha omega)
+	    (if (and (< 0 method) (= 0 omega))
+		0 (/ omega))))))
+
+(defun complex-floor (number)
+  "Find the floor of a complex number using Eugene McDonnell's algorithm."
+  (let* ((r (realpart number))
+	 (i (imagpart number))
+	 (b (+ (floor r) (* #C(0 1) (floor i))))
+	 (x (mod r 1))
+	 (y (mod i 1)))
+    (+ b (if (> 1 (+ x y))
+	     0 (if (>= x y) 1 #C(0 1))))))
+
+(defun apl-floor (omega)
+  "Find a number's floor using the complex floor algorithm if needed."
+  (if (complexp omega) (complex-floor omega)
+      (floor omega)))
+
+(defun apl-ceiling (omega)
+  "Find a number's ceiling deriving from the complex floor algorithm if needed."
+  (if (complexp omega) (- (complex-floor (- omega)))
+      (ceiling omega)))
+
+(defun apl-residue (omega alpha)
+  "Implementation of residue extended to complex numbers based on the complex-floor function"
+  (if (or (complexp omega) (complexp alpha))
+      (let ((ainput (complex (if (= 0 (realpart alpha))
+                                 1 (realpart alpha))
+                             (if (= 0 (imagpart alpha))
+                                 1 (imagpart alpha)))))
+        (- omega (* alpha (complex-floor (/ omega alpha)))))
+      (mod omega alpha)))
+
+(defun apl-gcd (omega alpha)
+  "Implementation of greatest common denominator extended to complex numbers based on the complex-floor function."
+  (if (or (complexp omega) (complexp alpha))
+      (if (= 0 (apl-residue omega alpha))
+          alpha (apl-gcd alpha (apl-residue omega alpha)))
+      (funcall (apl-xcy #'gcd) omega alpha)))
+
+(defun apl-lcm (omega alpha)
+  "Implementation of lease common multiple extended to complex numbers based on the complex-floor function."
+  (if (or (complexp omega) (complexp alpha))
+      (* alpha (/ omega (apl-gcd omega alpha)))
+      (funcall (apl-xcy #'lcm) omega alpha)))
+
 (defun without (omega alpha)
   "Remove elements in omega from alpha. Used to implement dyadic [~ without]."
   (flet ((compare (o a)
@@ -48,35 +100,6 @@
       (make-array (list (length included)) :element-type (element-type alpha)
 		  :initial-contents (reverse included)))))
 
-(defun complex-floor (number)
-  "Find the floor of a complex number using Eugene McDonnell's algorithm."
-  (let* ((r (realpart number))
-	 (i (imagpart number))
-	 (b (+ (floor r) (* #C(0 1) (floor i))))
-	 (x (mod r 1))
-	 (y (mod i 1)))
-    (+ b (if (> 1 (+ x y))
-	     0 (if (>= x y) 1 #C(0 1))))))
-
-(defun apl-floor (omega)
-  "Find a number's floor using the complex floor algorithm if needed."
-  (if (complexp omega) (complex-floor omega)
-      (floor omega)))
-
-(defun apl-ceiling (omega)
-  "Find a number's ceiling deriving from the complex floor algorithm if needed."
-  (if (complexp omega) (- (complex-floor (- omega)))
-      (ceiling omega)))
-
-(defun apl-divide (method)
-  "Generate a division function according to the [⎕DIV division method] in use."
-  (lambda (omega &optional alpha)
-    (if (and alpha (= 0 omega) (= 0 alpha))
-	(if (= 0 method) 1 0)
-	(if alpha (/ alpha omega)
-	    (if (and (< 0 method) (= 0 omega))
-		0 (/ omega))))))
-
 (defun apl-xcy (function)
   "Return a function to find the greatest common denominator or least common multiple of fractional as well as whole numbers. If one or both arguments are floats, the result is coerced to a double float."
   (lambda (omega alpha)
@@ -93,7 +116,7 @@
 		   (let ((d-product (* (denominator omega) (denominator alpha))))
 		     (/ (funcall function (* d-product omega) (* d-product alpha))
 			d-product)))))))
-  
+
 (defun scalar-compare (comparison-tolerance)
   "Compare two scalar values as appropriate for APL."
   (lambda (omega alpha)
@@ -237,7 +260,7 @@
 		 :do (setq found (compare item (row-major-aref alpha index))))
 	      (if found (setf (row-major-aref output index) 1))))
 	  output))))
-  
+
 (defun where-equal-to-one (omega index-origin)
   "Return a vector of coordinates from an array where the value is equal to one. Used to implement [⍸ where]."
   (let* ((indices) (match-count 0)
@@ -367,7 +390,8 @@
   "Wrapper for (aplesque:expand) implementing [/ replicate] and [\ expand]."
   (let ((output (expand degrees input axis :compress-mode compress-mode
 			:populator (build-populator metadata-symbol input))))
-    (if (and (= 0 (size output)) (arrayp input) (arrayp (row-major-aref input 0)))
+    (if (and (= 0 (size output)) (arrayp input) (not (= 0 (size input)))
+             (arrayp (row-major-aref input 0)))
 	(set-workspace-item-meta metadata-symbol output
 				 :eaprototype
 				 (make-prototype-of (funcall (if (= 0 (rank input)) #'identity #'aref)
@@ -500,7 +524,6 @@
 		 (aseg-last (reduce #'* (butlast adims 1)))
 		 (aseg-first (reduce #'* (rest adims)))
 		 (ofactor (* osize aseg-first)))
-	    ;; (print (list :oo out-dims omega alpha adims odims))
 	    (dotimes (i (size output))
 	      (multiple-value-bind (o a) (floor i asize)
       		(let ((value (if (not (arrayp omega))
@@ -601,15 +624,24 @@
 		   :format (lambda (number &optional segments rps)
 			     (print-apl-number-string number segments print-precision alpha rps)))))
 
-(defun format-array-uncollated (input &optional print-precision)
-  "Use (aplesque:array-impress) to print an array in matrix form without collation. Used to implement ⎕FMT."
-  (if (and print-precision (not (integerp print-precision)))
-      (error (concatenate 'string "The left argument to ⍕ must be an integer specifying"
-			  " the precision at which to print floating-point numbers.")))
-  (array-impress input :segment (lambda (number &optional segments)
-				  (count-segments number print-precision segments))
-		 :format (lambda (number &optional segments rps)
-			   (print-apl-number-string number segments print-precision print-precision rps))))
+(defun format-array-uncollated (print-precision-default)
+  "Generate a function using (aplesque:array-impress) to print an array in matrix form without collation. Used to implement ⎕FMT."
+  (lambda (input &optional print-precision)
+    (let ((print-precision (or print-precision print-precision-default))
+          (is-not-nested t))
+      (if (and print-precision (not (integerp print-precision)))
+          (error (concatenate 'string "The left argument to ⍕ must be an integer specifying"
+			      " the precision at which to print floating-point numbers.")))
+      ;; only right-indent if this is a nested array; this is important for box-drawing functions
+      (if (arrayp input) (xdotimes input (x (size input))
+                           (if (arrayp (row-major-aref input x))
+                               (setf is-not-nested nil))))
+      (array-impress input :unpadded is-not-nested
+                     :segment (lambda (number &optional segments)
+			        (count-segments number print-precision segments))
+		     :format (lambda (number &optional segments rps)
+			       (print-apl-number-string number segments
+                                                        print-precision print-precision rps))))))
 
 (defun generate-index-array (array)
   "Given an array, generate an array of the same shape whose each cell contains its row-major index."
@@ -723,10 +755,10 @@
 
 (defun match-lexical-function-identity (glyph)
   "Find the identity value of a lexical function based on its character."
-  (second (assoc glyph '((#\+ 0) (#\- 0) (#\× 1) (#\÷ 1) (#\⋆ 1) (#\* 1) (#\! 1)
+  (second (assoc glyph `((#\+ 0) (#\- 0) (#\× 1) (#\÷ 1) (#\⋆ 1) (#\* 1) (#\! 1)
 			 (#\< 0) (#\≤ 1) (#\= 1) (#\≥ 1) (#\> 0) (#\≠ 0) (#\| 0)
 			 (#\^ 1) (#\∧ 1) (#\∨ 0) (#\⊤ 0) (#\∪ #()) (#\⌽ 0) (#\⊖ 0)
-			 (#\⌈ most-negative-long-float) (#\⌊ most-positive-long-float))
+			 (#\⌈ ,most-negative-long-float) (#\⌊ ,most-positive-long-float))
 		 :test #'char=)))
 
 (defun operate-reducing (function function-glyph axis &optional last-axis)
@@ -930,10 +962,11 @@
     (if alpha (funcall left-fn-monadic (funcall right-fn-dyadic omega alpha))
 	(funcall left-fn-monadic (funcall right-fn-monadic omega)))))
 
-(defun operate-to-power (power function-retriever)
+(defun operate-to-power (get-power function-retriever)
   "Generate a function applying a function to a value and successively to the results of prior iterations a given number of times. Used to implement [⍣ power]."
   (lambda (omega &optional alpha)
-    (let ((arg omega) (function (funcall function-retriever alpha (> 0 power))))
+    (let* ((arg omega) (power (funcall get-power))
+           (function (funcall function-retriever alpha (> 0 power))))
       (dotimes (index (abs power))
 	(setq arg (if alpha (funcall function arg alpha)
 		      (funcall function arg))))

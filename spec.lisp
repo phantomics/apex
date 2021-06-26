@@ -5,16 +5,6 @@
 
 "This specification defines the April language. All of the standard functions and operators and their symbols, along with the language's grammar, utilities, reserved symbols, tests and demo suite are specified here."
 
-(defvar *digit-vector* "0123456789")
-
-(defvar *alphabet-vector* "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-(defvar *idiom-native-symbols* '(⍺ ⍵ ⍶ ⍹ ⍺⍺ ⍵⍵ ∇ ∇∇ index-origin print-precision *digit-vector*
-				 *alphabet-vector* *apl-timestamp* to-output output-stream))
-
-(defvar *system-variables* '(:index-origin *index-origin* :print-precision *print-precision*
-			     :comparison-tolerance *comparison-tolerance* :division-method *division-method*))
-
 (let ((circular-functions ;; APL's set of circular functions called using the ○ symbol with a left argument
        (vector (lambda (x) (exp (complex 0 x)))
 	       (lambda (x) (complex 0 x))
@@ -217,7 +207,7 @@
  (symbols (:variable ⎕ to-output ⎕io *index-origin* ⎕pp print-precision ⎕div *division-method*
 		       ⎕ost output-stream ⎕ct *comparison-tolerance*)
 	  (:constant ⎕a *alphabet-vector* ⎕d *digit-vector* ⎕ts *apl-timestamp*)
-	  (:function ⎕t coerce-or-get-type ⎕fmt format-array-uncollated))
+	  (:function ⎕t coerce-or-get-type ⎕fmt (format-array-uncollated print-precision)))
  
  ;; APL's set of functions represented by characters
  (functions
@@ -261,14 +251,17 @@
 	    (is "⌊16⋆÷2" 4)))
   (⍟ (has :titles ("Natural Logarithm" "Logarithm"))
      (ambivalent :symmetric-scalar log)
-     (inverse (ambivalent exp :plain (reverse-op expt) :right-composed (λωα (expt omega (/ alpha)))))
+     (inverse (ambivalent exp :plain (reverse-op :dyadic expt) :right-composed (λωα (expt omega (/ alpha)))))
      (tests (is "⌊1000×⍟5" 1609)
 	    (is "⌊2⍟8" 3)))
   (\| (has :titles ("Magnitude" "Residue"))
-      (ambivalent :asymmetric-scalar abs mod)
+      (ambivalent :asymmetric-scalar abs apl-residue)
       (tests (is "|55" 55)
 	     (is "|¯33" 33)
-	     (is "8|39" 7)))
+	     (is "8|39" 7)
+             (is "(3r8J12r7×⍳12)|7r2J5r9×⍳12"
+                 #(#C(1/14 47/36) #C(1/7 47/18) #C(3/14 47/12) #C(2/7 47/9) #C(5/14 235/36) #C(3/7 47/6)
+                   #C(1/2 329/36) #C(4/7 94/9) #C(9/14 47/4) #C(5/7 235/18) #C(11/14 517/36) #C(6/7 47/3)))))
   (! (has :titles ("Factorial" "Binomial"))
      (ambivalent :asymmetric-scalar sprfact binomial)
      (tests (is "!5" 120)
@@ -280,13 +273,19 @@
      (inverse (dyadic :commuted identity))
      (tests (is "⌈1.0001" 2)
 	    (is "⌈1.9998" 2)
-	    (is "3⌈0 1 2 3 4 5" #(3 3 3 3 4 5))))
+	    (is "3⌈0 1 2 3 4 5" #(3 3 3 3 4 5))
+            (is "⌈21r5J3r11×⍳20"
+                #(#C(4 1) #C(8 1) #C(13 1) #C(17 1) #C(21 2) #C(25 2) #C(30 2) #C(34 2) #C(38 3) #C(42 3)
+                  #C(47 3) #C(51 3) #C(55 4) #C(59 4) #C(63 5) #C(67 5) #C(72 5) #C(76 5) #C(80 5) #C(84 6)))))
   (⌊ (has :titles ("Floor" "Minimum"))
      (ambivalent :asymmetric-scalar apl-floor (reverse-op min))
      (inverse (dyadic :commuted identity))
      (tests (is "⌊1.0001" 1)
 	    (is "⌊1.9998" 1)
-	    (is "3⌊0 1 2 3 4 5" #(0 1 2 3 3 3))))
+	    (is "3⌊0 1 2 3 4 5" #(0 1 2 3 3 3))
+            (is "⌊21r5J3r11×⍳20"
+                #(4 8 #C(12 1) #C(16 1) #C(21 1) #C(25 1) #C(29 2) #C(33 2) #C(38 2) #C(42 2) #C(46 3)
+                  #C(50 3) #C(55 3) #C(58 4) #C(63 4) #C(67 4) #C(71 5) #C(75 5) #C(79 5) #C(84 5)))))
   (? (has :titles ("Random" "Deal"))
      (ambivalent (scalar-function (λω (if (integerp omega)
 					  (if (= 0 omega) (+ double-float-epsilon
@@ -369,14 +368,14 @@
 	    (IS "≠↑'ONE' 'TWO' 'ONE' 'THREE' 'TWO' 'THREE'" #*110100)
 	    (is "3≠1 2 3 4 5" #*11011)
 	    (is "'Harrison'≠'Bergeron'" #*11011100)))
-  (∧ (has :title "And" :aliases (^))
-     (dyadic (scalar-function (apl-xcy #'lcm)))
+  (∧ (has :title "And" :aliases (^)) ;; TODO: complex tests for ∨∧ once proper complex functionality is verified
+     (dyadic (scalar-function apl-lcm))
      (tests (is "0 1 0 1∧0 0 1 1" #*0001)))
   (⍲ (has :title "Nand")
      (dyadic (scalar-function (boolean-op (λωα (not (= omega alpha 1))))))
      (tests (is "0 1 0 1⍲0 0 1 1" #*1110)))
   (∨ (has :title "Or")
-     (dyadic (scalar-function (apl-xcy #'gcd)))
+     (dyadic (scalar-function apl-gcd))
      (tests (is "0 1 0 1∨0 0 1 1" #*0111)))
   (⍱ (has :title "Nor")
      (dyadic (scalar-function (boolean-op (λωα (= omega alpha 0)))))
@@ -539,7 +538,13 @@
   	     (is "(2 3⍴⍳9),[2.5]2 3⍴⍳9" #3A(((1 1) (2 2) (3 3)) ((4 4) (5 5) (6 6))))
 	     (is "'UNDER',[1.0]'-'" "UNDER-")
   	     (is "'UNDER',[0.5]'-'" #2A((#\U #\N #\D #\E #\R) (#\- #\- #\- #\- #\-)))
-  	     (is "'HELLO',[1.5]'.'" #2A((#\H #\.) (#\E #\.) (#\L #\.) (#\L #\.) (#\O #\.)))))
+  	     (is "'HELLO',[1.5]'.'" #2A((#\H #\.) (#\E #\.) (#\L #\.) (#\L #\.) (#\O #\.)))
+	     (is "(8+2 2 2⍴⍳8),[1.5]2 2 2⍴⍳8" #4A((((9 10) (11 12)) ((1 2) (3 4)))
+						  (((13 14) (15 16)) ((5 6) (7 8)))))
+	     (is "(8+2 2 2⍴⍳8),[2.5]2 2 2⍴⍳8" #4A((((9 10) (1 2)) ((11 12) (3 4)))
+						  (((13 14) (5 6)) ((15 16) (7 8)))))
+	     (is "(8+2 2 2⍴⍳8),[0.5]2 2 2⍴⍳8" #4A((((9 10) (11 12)) ((13 14) (15 16)))
+						  (((1 2) (3 4)) ((5 6) (7 8)))))))
   (⍪ (has :titles ("Table" "Catenate First"))
      (ambivalent #'tabulate (catenate-on-first index-origin))
      (tests (is "⍪4" 4)
@@ -868,7 +873,10 @@
 					  ((3 4 5 6 7) (3 4 5 6 7) (8 9 1 2 3) (4 5 6 7 8)
 					   (4 5 6 7 8) (9 1 2 3 4) (9 1 2 3 4) (9 1 2 3 4))
 					  ((5 6 7 8 9) (5 6 7 8 9) (1 2 3 4 5) (6 7 8 9 1)
-					   (6 7 8 9 1) (2 3 4 5 6) (2 3 4 5 6) (2 3 4 5 6))))))
+					   (6 7 8 9 1) (2 3 4 5 6) (2 3 4 5 6) (2 3 4 5 6))))
+            (is "⍴0 1 0 1/0 4⍴0" #(0 2))
+            (is "⍴5/0 4⍴0" #(0 20))
+            (is "⍴2 3/[2]0 2 0⍴0" #(0 5 0))))
   (⌿ (has :title "Replicate First")
      (dyadic (λωαχ (expand-array alpha omega *first-axis* (quote (inws *value-meta*)) :compress-mode t)))
      (inverse (dyadic :plain (λωαχ (if (is-unitary omega)
@@ -900,7 +908,9 @@
       	     				   (2 3 4 5 6)))
       	     (is "¯3\\0⍴⊂2 2⍴(⊂3 3⍴⍳6) 9 8 7" #(#2A((#0A#2A((0 0 0) (0 0 0) (0 0 0)) 0) (0 0))
       	     					#2A((#0A#2A((0 0 0) (0 0 0) (0 0 0)) 0) (0 0))
-      	     					#2A((#0A#2A((0 0 0) (0 0 0) (0 0 0)) 0) (0 0))))))
+      	     					#2A((#0A#2A((0 0 0) (0 0 0) (0 0 0)) 0) (0 0))))
+             (is "⍴0 0 0\\0 0⍴0" #(0 3))
+             (is "0 0 0 0\\3 0⍴0" #2A((0 0 0 0) (0 0 0 0) (0 0 0 0)))))
   (⍀ (has :title "Expand First")
      (dyadic (λωαχ (expand-array alpha omega *first-axis* (quote (inws *value-meta*)))))
      (tests (is "2⍀5" #(5 5))
@@ -1299,7 +1309,8 @@
      (pivotal (with-derived-operands (right left right-fn-dyadic left-fn-monadic
 					    left-fn-dyadic left-op left-axes)
 		(if right-fn-dyadic `(operate-until ,right-fn-dyadic ,(or left-fn-monadic left) ,left-fn-dyadic)
-		    `(operate-to-power ,right ,(generate-function-retriever left-op left-axes)))))
+		    `(operate-to-power (lambda () ,right)
+                                       ,(generate-function-retriever left-op left-axes)))))
      (tests (is "fn←{2+⍵}⍣3 ⋄ fn 5" 11)
   	    (is "{2+⍵}⍣3⊢9" 15)
   	    (is "2{⍺×2+⍵}⍣3⊢9" 100)
@@ -1544,7 +1555,7 @@
   (for "Inline pivotal operation-derived function expression."
        "1 2 3 (∘.+) 4 5 6" #2A((5 6 7) (6 7 8) (7 8 9)))
   (for "Composed pivotal operation-derived function expression."
-      "1 2 3∘(×.+)⊢4 5 6" 315)
+       "1 2 3∘(×.+)⊢4 5 6" 315)
   (for "Multiple composed pivotal operations called in sequence."
        "(4 5 6∘(∘.×)) (1 2 3∘(∘.+)) 10 20 30"
        #3A(((44 84 124) (48 88 128) (52 92 132))
@@ -1609,7 +1620,10 @@
   (for "Locally-scoped function used with lateral operator within if-statement."
        "(⍳3){ g←{5+⍵} ⋄ b←-∘5 ⋄ h←{12×$[~2|⍺;b¨⍵;g ⍵]} ⋄ ⍺ h¨⍵} (⍳3)+3⍴⊂⍳3"
        #(#(84 96 108) #(-24 -12 0) #(108 120 132)))
-  (for "Locally-scoped function used with operator within if-statement."
+  (for "Locally-scoped function used with function-overloadedlateral operator within if-statement."
+       "(⍳3){ g←{5+⍵} ⋄ b←-∘× ⋄ h←{12×$[~2|⍺;b/⍵;g ⍵]} ⋄ ⍺ h¨⍵} (⍳3)+3⍴⊂⍳3"
+       #(#(84 96 108) 24 #(108 120 132)))
+  (for "Locally-scoped function used with pivotal operator within if-statement."
        "(⍳3){ g←{⍵×⍺-2} ⋄ b←{⍺×⍵÷3} ⋄ h←{12×$[~2|⍺;⍺ (b . g) ⍵;⍺ g ⍵]} ⋄ ⍺ h¨⍵} (⍳3)+3⍴⊂⍳3"
        #(#(-24 -36 -48) 0 #(48 60 72)))
   (for "Glider 1." "(3 3⍴⍳9)∊1 2 3 4 8" #2A((1 1 1) (1 0 0) (0 1 0)))
@@ -2124,6 +2138,7 @@ fun 3")) 8))
 	      #(0 1 2 3 4 5 6) :test #'equalp))
    )))
 
+;; create the common workspace and the space for unit tests
 (april-create-workspace common)
 (april-create-workspace unit-test-staging)
 
@@ -2138,7 +2153,7 @@ A not-very-useful scalar function that adds 3 to its argument(s) is specified he
   (with (:name :extra-functions))
   (⍛ (has :title "Add3")
      (ambivalent (scalar-function (λω (+ 3 omega)))
-		 (scalar-function (lambda (alpha omega) (+ 3 alpha omega))))
+                 (scalar-function (lambda (alpha omega) (+ 3 alpha omega))))
      (tests (is "⍛77" 80)
-	    (is "8⍛7" 18)))))
+            (is "8⍛7" 18)))))
 |#
