@@ -43,7 +43,6 @@ display ← { ⎕IO←0                            ⍝ Boxed display of array.
 
   open←{(1⌈⍴⍵)⍴⍵}                            ⍝ exposure of null axes
   trim←{(~1 1⍷∧⌿⍵=' ')/⍵}                    ⍝ removal of extra blank cols
-  prom←{⍵⍴⍨1,⍴⍵}                             ⍝ promote array to next rank
   char←{$[⍬≡⍴⍵;'─';(⊃⍵∊'¯',⎕D)⊃'#~']}∘⍕      ⍝ simple scalar type
   type←{{(1=⍴⍵)⊃'+'⍵}∪,char¨⍵}               ⍝ simple array type
   axes←{(-2⌈⍴⍴⍵)↑1+×⍴⍵}                      ⍝ array axis types
@@ -51,7 +50,7 @@ display ← { ⎕IO←0                            ⍝ Boxed display of array.
   line←{(49=⎕DT 1⍴⍵)⊃' -'}                   ⍝ underline for atom
 
   {                                          ⍝ recursive boxing of arrays:
-    $[0=≡⍵;' '⍪(prom open ⎕FMT ⍵)⍪line ⍵;    ⍝ simple scalar
+    $[0=≡⍵;' '⍪(open ⎕FMT ⍵)⍪line ⍵;         ⍝ simple scalar
       1=≡⍵;(deco ⍵)box open ⎕FMT open ⍵;     ⍝ simple array
       ('∊'deco ⍵)box trim ⎕FMT ∇¨open ⍵      ⍝ nested array
      ]

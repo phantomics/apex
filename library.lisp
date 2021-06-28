@@ -636,12 +636,15 @@
       (if (arrayp input) (xdotimes input (x (size input))
                            (if (arrayp (row-major-aref input x))
                                (setf is-not-nested nil))))
-      (array-impress input :unpadded is-not-nested
-                     :segment (lambda (number &optional segments)
-			        (count-segments number print-precision segments))
-		     :format (lambda (number &optional segments rps)
-			       (print-apl-number-string number segments
-                                                        print-precision print-precision rps))))))
+      (funcall (lambda (output)
+                 (if (/= 1 (rank output))
+                     output (array-promote output)))
+               (array-impress input :unpadded is-not-nested
+                              :segment (lambda (number &optional segments)
+			                 (count-segments number print-precision segments))
+		              :format (lambda (number &optional segments rps)
+			                (print-apl-number-string number segments
+                                                                 print-precision print-precision rps)))))))
 
 (defun generate-index-array (array)
   "Given an array, generate an array of the same shape whose each cell contains its row-major index."
