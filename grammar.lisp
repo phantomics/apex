@@ -233,9 +233,20 @@
 				    (values (output-function (mapcar (lambda (f) (funcall process f sub-props))
 								     fn)
 							     nil assigned-symbols arg-symbols)
-					    (list :type (list :operator :closure
-							      (if is-pivotal :pivotal :lateral)
-							      (if is-dyadic :dyadic :monadic))))))
+					    (list :type (remove
+                                                         nil (list :operator :closure
+							           (if is-pivotal :pivotal :lateral)
+							           (if is-dyadic :dyadic :monadic)
+                                                                   ;; indicate the types of the operands for use
+                                                                   ;; in the function composer pattern below
+                                                                   (if (member '⍶ arg-symbols)
+                                                                       :left-operand-value
+                                                                       (if (member '⍺⍺ arg-symbols)
+                                                                           :left-operand-function))
+                                                                   (if (member '⍹ arg-symbols)
+                                                                       :right-operand-value
+                                                                       (if (member '⍵⍵ arg-symbols)
+                                                                           :right-operand-function))))))))
 		    (values nil nil)))
 	      (values nil nil)))
       (if (symbolp this-item)
@@ -327,10 +338,9 @@
 	      (listp (first (last (first items)))))
 	 (progn (setq items prior-items)
 		;; handle inline operators as with ÷{⍺⍺ ⍵}4, unless the operator is being assigned
-		;; as with op←{⍺⍺ 4}
+		;; as with op←{⍺⍺ ⍵}
 		(if (and (assign-element function-form function-props process-operator)
-			 (not (and (listp (first items))
-			  	   (eq :fn (caar items))
+			 (not (and (listp (first items)) (eq :fn (caar items))
 			  	   (char= #\← (cadar items)))))
 		    (setq is-inline-operator t)))))
   (let ((is-function (or (and (not is-inline-operator)
@@ -344,21 +354,27 @@
 						  (getf (getf (first (last preceding-properties)) :special)
 							:fn-assigned-symbols))))
 				(not (third next)))))))
-    (if (and function-form is-function)
-	(values (if (or (not axes) (of-lexicon idiom :functions function-form))
-		    ;; if axes are present, this is an n-argument function
-		    (if (not (and (symbolp function-form) (is-workspace-function function-form)))
-			function-form `(function (inws ,function-form)))
-		    (let ((call-form (if (listp function-form)
-					 function-form `(function ,(insym function-form)))))
-		      `(apl-call :nafn ,call-form ,@(first axes))))
-		(list :type (if (member :operator (getf function-props :type))
-				(list :operator :inline-operator
-				      (if (member :pivotal (getf function-props :type))
-					  :pivotal :lateral))
-				'(:function :inline-function))
-		      :axes (or axes (getf function-props :axes)))
-		items))))
+    (if (and (member :left-operand-value (getf function-props :type))
+             (not (and (listp (first items)) (eq :fn (caar items))
+		       (char= #\← (cadar items)))))
+        ;; disqualify inline operators whose left operand is a value, as for { ↑⍵{(⍺|⍶+⍵)-⍵}/2*⍺-0 1 },
+        ;; unless the operator is being assigned a name
+        (values nil nil prior-items)
+        (if (and function-form is-function)
+	    (values (if (or (not axes) (of-lexicon idiom :functions function-form))
+		        ;; if axes are present, this is an n-argument function
+		        (if (not (and (symbolp function-form) (is-workspace-function function-form)))
+			    function-form `(function (inws ,function-form)))
+		        (let ((call-form (if (listp function-form)
+					     function-form `(function ,(insym function-form)))))
+		          `(apl-call :nafn ,call-form ,@(first axes))))
+		    (list :type (if (member :operator (getf function-props :type))
+				    (list :operator :inline-operator
+				          (if (member :pivotal (getf function-props :type))
+					      :pivotal :lateral))
+				    '(:function :inline-function))
+		          :axes (or axes (getf function-props :axes)))
+		    items)))))
 
 (labels ((verify-lateral-operator-symbol (symbol space)
 	   (if (symbolp symbol) (let ((symbol (intern (concatenate 'string "𝕆𝕃∇" (string symbol)))))
@@ -819,7 +835,12 @@
 	      left-value-props prior-items right-operand-axes preceding-type)
     ;; Match an inline lateral operator composition like +{⍺⍺ ⍵}5.
     ((setq preceding-type (getf (first preceding-properties) :type))
-     (assign-element operator operator-props process-operator '(:valence :lateral))
+     (assign-element operator operator-props process-operator
+                     `(:valence :lateral
+                                :special
+		                (:lexvar-symbols ,(getf (getf properties :special) :lexvar-symbols)
+			                         :fn-assigned-symbols ,(getf (getf properties :special)
+                                                                             :fn-assigned-symbols))))
      (if operator (progn (assign-axes left-operand-axes process)
 			 (setq prior-items items)
 			 (assign-element left-operand left-operand-props process-function)
@@ -834,13 +855,19 @@
 				    (assign-subprocessed
 				     left-operand left-operand-props
 				     `(:special (:omit (:value-assignment :function-assignment :operation)
-						       ,@include-lexvar-symbols)))
+						       ,@include-lexvar-symbols
+			                               :fn-assigned-symbols ,(getf (getf properties :special)
+                                                                                   :fn-assigned-symbols))))
 				    ;; try getting a value on the left, as for 3 +{⍺ ⍺⍺ ⍵} 4
 				    (if (member :dyadic (getf operator-props :type))
 					(assign-subprocessed
 					 left-value left-value-props
-					 '(:special (:omit (:value-assignment :function-assignment
-							    :operation))))))))))
+					 `(:special (:omit
+                                                     (:value-assignment :function-assignment :operation)
+                                                     :lexvar-symbols ,(getf (getf properties :special)
+                                                                            :lexvar-symbols)
+			                             :fn-assigned-symbols ,(getf (getf properties :special)
+                                                                                 :fn-assigned-symbols))))))))))
   (if operator
       ;; get left axes from the left operand and right axes from the precedent's properties so the
       ;; functions can be properly curried if they have axes specified
@@ -851,20 +878,17 @@
 	(if (and (characterp left-operand) (member :array (getf left-operand-props :type)))
 	    (setq left-operand (list :char left-operand)))
 	(values (if (and (listp operator) (member :lateral (getf operator-props :type)))
-		    `(apl-call :fn (apl-compose :op ,operator
-						,(if (characterp left-operand)
-						     `(lambda (,omega &optional ,alpha)
-							(if ,alpha
-							    (apl-call :fn ,(resolve-function
-									    :dyadic left-operand)
-								      ,omega ,alpha)
-							    (apl-call :fn ,(resolve-function
-									    :monadic left-operand)
-								      ,omega)))
-                                                     ;; handle ∇ function self-reference
-						     (if (and (symbolp left-operand)
-                                                              (eql '∇ left-operand))
-                                                         '#'∇self left-operand)))
+		    `(apl-call :fn (apl-compose
+                                    :op ,operator
+				    ,(if (characterp left-operand)
+					 `(lambda (,omega &optional ,alpha)
+					    (if ,alpha (apl-call :fn ,(resolve-function :dyadic left-operand)
+							         ,omega ,alpha)
+						(apl-call :fn ,(resolve-function :monadic left-operand)
+							  ,omega)))
+                                         ;; handle ∇ function self-reference
+					 (if (and (symbolp left-operand) (eql '∇ left-operand))
+                                             '#'∇self left-operand)))
 			       ,precedent ,@(if left-value (list left-value))))
 		'(:type (:array :evaluated)) items))))
 
@@ -889,8 +913,13 @@
 				    ;; fn←5∘- where an operator-composed function is assigned
 				    (assign-subprocessed
 				     left-operand left-operand-props
-				     '(:special (:omit (:value-assignment :function-assignment
-							:operation :train-composition)))))))))
+				     `(:special
+                                       (:omit (:value-assignment :function-assignment
+							         :operation :train-composition)
+                                              :lexvar-symbols ,(getf (getf properties :special)
+                                                                     :lexvar-symbols)
+			                      :fn-assigned-symbols ,(getf (getf properties :special)
+                                                                          :fn-assigned-symbols)))))))))
   (if (and operator left-operand)
       ;; get left axes from the left operand and right axes from the precedent's properties so the
       ;; functions can be properly curried if they have axes specified

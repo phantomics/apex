@@ -377,7 +377,6 @@
 	 ;; for boolean arrays, check whether the output will directly hold the array contents
 	 (output (if (not (and oscalar (or ascalar (not alpha))))
 		     (make-array output-dims :element-type output-type))))
-    ;; (print (list :om omega alpha is-non-scalar-function))
     (flet ((promote-or-not (item)
 	     ;; function for wrapping output in a vector or 0-rank array if the input was thusly formatted
 	     (declare (dynamic-extent item))
@@ -1103,7 +1102,6 @@
 				omega (make-array osegment :element-type (element-type omega)))))
 	 (output (make-array (append (butlast adims) (rest odims)))))
     ;; TODO: can't parallelize yet
-    ;; (print (list :oo alpha omega output))
     (dotimes (x (size output)) ;; xdo
       (let* ((avix (floor x ovectors))
 	     (ovix (mod x ovectors))
@@ -1652,7 +1650,6 @@
 				       (if (= r (- this-rank 2))
 					   (incf out-index (* remainder (aref ofactors (+ 1 i input-rank-delta))))
 					   (setf remaining remainder)))))
-			  ;; (print (list :oo i out-index this-index))
 			  (setf (row-major-aref output out-index)
 				(row-major-aref input-element this-index)))))))
 	    output))))

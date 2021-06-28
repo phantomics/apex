@@ -633,12 +633,17 @@
 					(append output (loop :for char :below (length glyph)
 							  :collect (aref glyph char)))))))))
 
+(defun numeric-string (item)
+  (funcall #'april::parse-apl-number-string item))
+
 (defun =vex-string (idiom &optional output special-precedent)
   "Parse a string of text, converting its contents into nested lists of Vex tokens."
   (let ((string-found))
-    (labels ((?blank-character () (?satisfies (of-utilities idiom :match-blank-character)))
+    (labels ((?blank-character   () (?satisfies (of-utilities idiom :match-blank-character)))
 	     (?newline-character () (?satisfies (of-utilities idiom :match-newline-character)))
-	     (?token-character () (?satisfies (of-utilities idiom :match-token-character)))
+	     (?numeric-character () (?satisfies (of-utilities idiom :match-numeric-character)))
+	     (?token-character   () (?satisfies (of-utilities idiom :match-token-character)))
+	     ;; (numeric-string (item) (funcall (of-utilities idiom :format-number) item))
 	     (=string (&rest delimiters)
 	       (let ((lastc) (delimiter) (escape-indices) (char-index 0))
 		 (=destructure (_ content)
@@ -745,7 +750,7 @@
 			    (=subseq (%any (?satisfies 'characterp))))
 		   (error "Mismatched enclosing characters; each closing ~a must be preceded by an opening ~a."
 			  errant-char matching-char))))
-	     (process-lines (lines &optional output meta)
+     	     (process-lines (lines &optional output meta)
 	       (if (or (= 0 (length lines))
 		       (loop :for c :across lines :always (char= c #\ )))
 		   (list output meta)
@@ -817,22 +822,32 @@
 										    :lateral-operators char)
 									:lateral :unitary))))
 						      (list char))))))
+			  (=transform (%and (?test ('numeric-string) (=subseq (%some (?numeric-character))))
+                                            (=subseq (%some (?numeric-character))))
+			              (lambda (string)
+			        	(or (funcall (of-utilities idiom :format-number)
+			                             ;; if there's an overloaded token character passed in
+			                             ;; the special precedent, prepend it to the token
+			                             ;; being processed
+			        		     (if (getf special-precedent :overloaded-num-char)
+			        		         (format nil "~a~a" (getf special-precedent
+                                                                                  :overloaded-num-char)
+			        		 	         string)
+			        		         string)))))
 			  (=transform (=subseq (%some (?token-character)))
 				      (lambda (string)
 					(multiple-value-bind (formatted is-symbol)
-					    (funcall (of-utilities idiom :format-value)
-						     (string-upcase (idiom-name idiom))
-						     ;; if there's an overloaded token character passed in
-						     ;; the special precedent, prepend it to the token
-						     ;; being processed
-						     (idiom-symbols idiom)
-						     (if (getf special-precedent :overloaded-num-char)
-							 (format nil "~a~a"
-						 		 (getf special-precedent :overloaded-num-char)
-						 		 string)
-							 string))
-					  (if is-symbol (setq symbols (cons formatted symbols)))
-					  formatted)))
+		                            (funcall (of-utilities idiom :format-value)
+			                             (string-upcase (idiom-name idiom))
+			                             ;; if there's an overloaded token character, do as above
+			                             (idiom-symbols idiom)
+			                             (if (getf special-precedent :overloaded-num-char)
+				                         (format nil "~a~a" (getf special-precedent
+                                                                                  :overloaded-num-char)
+					                         string)
+				                         string))
+		                          (if is-symbol (setq symbols (cons formatted symbols)))
+		                          formatted)))
 			  ;; this last clause returns the remainder of the input in case the input has either no
 			  ;; characters or only blank characters before the first line break
 			  (=subseq (%any (?satisfies 'characterp))))

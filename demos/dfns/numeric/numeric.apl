@@ -123,11 +123,10 @@ k6174 ← {                                    ⍝ Kaprekar's operation.
   
 ⍝ From http://dfns.dyalog.com/c_int.htm
 
-⍝ int ← { ↑⍵{(⍺|⍺⍺+⍵)-⍵}/2*⍺-0 1 }             ⍝ Signed from unsigned integer.
-⍝ bug: not composing with ⍵ before reduce
-  
+int ← { ↑⍵{(⍺|⍶+⍵)-⍵}/2*⍺-0 1 }              ⍝ Signed from unsigned integer.
+
 ⍝ From http://dfns.dyalog.com/c_uns.htm
-  
+
 uns ← { (2*⍺)|⍵ }                            ⍝ Unsigned from signed integer.
 
 ⍝ From http://dfns.dyalog.com/c_nicediv.htm
@@ -204,13 +203,12 @@ to ← { ⎕IO←0                                 ⍝ Sequence ⍺ .. ⍵
 ⍝⍝ Real number processing
 
 ⍝ From http://dfns.dyalog.com/c_alt.htm
-⍝ TODO: bug with ⍺⍺.⍵⍵
 alt ← {                                      ⍝ Alternant.
   r c←⍴⍵                                     ⍝ matrix ⍵
   $[0=r;⍵⍵⌿,⍵;                               ⍝ zero-row case
     1≥c;⍺⍺⌿,⍵;                               ⍝ zero/one-column case
     M←~⍤1 0⍨⍳r                               ⍝ minors
-    ⍵[;⎕IO]⍺⍺ . ⍵⍵(∇⍤2)⍵[M;1↓⍳c]
+    ⍵[;⎕IO]⍺⍺.⍵⍵(∇⍤2)⍵[M;1↓⍳c]
    ]
 }
 
