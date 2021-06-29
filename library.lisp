@@ -992,7 +992,6 @@
     (declare (ignorable alpha))
     (if (and left (not (functionp left)))
     	(setq left-fn-d nil left-fn-m nil))
-    ;; (print (list :ll left-fn-m left-fn-d right right-fn))
     (if (and (or left-fn-d left-fn-m)
 	     (or right-fn (or (vectorp right) (not (arrayp right)))))
 	(if (and (not right-fn)
@@ -1018,7 +1017,6 @@
 	    (let ((true-indices (make-array (size omega) :element-type '(unsigned-byte 8) :initial-element 0))
 		  (omega-copy (copy-array omega :element-type t))
 		  (sv-length 0))
-              ;; (print (list :cc alpha omega right))
 	      (dotimes (i (size omega)) ;; xdo
 		(if (or (and right-fn (/= 0 (funcall right-fn (row-major-aref omega i))))
 			(and (arrayp right)
@@ -1039,7 +1037,6 @@
 			     (incf tvix))))
 		(let ((to-assign (if alpha (funcall left-fn-d true-vector alpha)
 				     (funcall left-fn-m true-vector))))
-                  ;; (print (list :to to-assign true-vector))
 		  (dotimes (i (size omega)) ;; xdo 
 	      	    (if (/= 0 (row-major-aref true-indices i))
 	      		(setf (row-major-aref omega-copy i)
@@ -1048,7 +1045,6 @@
 				  ;; the value to be assigned, not a vector of values to assign
 				  (disclose to-assign)
 				  (row-major-aref to-assign (1- (row-major-aref true-indices i)))))))
-                  ;; (print (list :oc omega-copy))
 		  omega-copy))))
 	;; if the right argument is an array of rank > 1, assign the left operand values or apply the
 	;; left operand function as per choose or reach indexing
