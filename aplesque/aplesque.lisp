@@ -448,8 +448,11 @@
       (if (and (arrayp item2) (= (rank item1) (rank item2))
 	       (let ((dims1 (dims item1))
 		     (dims2 (dims item2)))
-		 (if (loop :for d :below (length dims1)
-			:always (= (nth d dims1) (nth d dims2)))
+		 (if (and (if (not (member (element-type item1) '(character base-char)))
+                              (not (member (element-type item2) '(character base-char)))
+                              (member (element-type item2) '(character base-char)))
+                          ;; compared arrays must be either character or non-character to match
+                          (loop :for d :below (length dims1) :always (= (nth d dims1) (nth d dims2))))
 		     (loop :for i :below (size item1)
 			:always (array-compare (row-major-aref item1 i) (row-major-aref item2 i))))))
 	  (let ((match t))
@@ -719,8 +722,7 @@
 	      (/= (or (and (arrayp degrees)
 			   (loop :for degree :across degrees :when (< 0 degree)
 			      :counting degree :into dcount :finally (return dcount)))
-		      degrees
-		      )
+		      degrees)
 		  (nth axis (dims input))))
 	 (error "Attempting to expand elements across array but ~a"
 		"positive degrees are not equal to length of selected input axis."))
@@ -906,7 +908,7 @@
 (defun enlist (input)
   "Create a vector containing all elements of the input array in ravel order, breaking down nested and multidimensional arrays."
   (if (not (arrayp input))
-      (vector input)
+      (make-array 1 :initial-element input :element-type (type-of input))
       (let ((index 0))
 	(labels ((measure-array (in)
 		   (let ((length 0))

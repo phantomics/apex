@@ -345,7 +345,14 @@
 		    (setq is-inline-operator t)))))
   (let ((is-function (or (and (not is-inline-operator)
 			      (not (member :overloaded-operator (getf function-props :type))))
-			 (let ((next (if items (multiple-value-list (funcall process items)))))
+			 (let* ((sub-properties
+                                 ;; create special properties for next level down
+                                 `(:special (,@include-lexvar-symbols
+					     :fn-assigned-symbols
+					     ,(getf (getf (first (last preceding-properties)) :special)
+						    :fn-assigned-symbols))))
+                                (next (if items (multiple-value-list (funcall process items sub-properties)))))
+                           ;; (print (list :nn next (getf (first (last preceding-properties)) :special)))
 			   (and (not (member :function (getf (second next) :type)))
 				(not (and (listp (first next))
 					  (eql 'inws (caar next))
@@ -387,17 +394,16 @@
        (setq symbol-referenced (verify-lateral-operator-symbol item space))
        (assign-element operator-form operator-props process-operator '(:valence :lateral))
        (if operator-form (progn (assign-axes operand-axes process)
-				(assign-subprocessed operand-form operand-props
-		 				     `(:special (:omit (:value-assignment :function-assignment
-		 							                  :operation :operator-assignment
-									                  :train-composition)
-								       ,@include-lexvar-symbols
-								       :fn-assigned-symbols
-								       ,(getf (getf (first
-										     (last
-										      preceding-properties))
-										    :special)
-									      :fn-assigned-symbols)))))))
+				(assign-subprocessed
+                                 operand-form operand-props
+		 		 `(:special (:omit (:value-assignment :function-assignment
+		 						      :operation :operator-assignment
+								      :train-composition)
+						   ,@include-lexvar-symbols
+						   :fn-assigned-symbols
+						   ,(getf (getf (first (last preceding-properties))
+								:special)
+							  :fn-assigned-symbols)))))))
     (if symbol-referenced
 	;; call the operator constructor on the output of the operand constructor which integrates axes
 	(values (list 'apl-compose :op (list 'inws symbol-referenced)

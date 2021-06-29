@@ -633,9 +633,6 @@
 					(append output (loop :for char :below (length glyph)
 							  :collect (aref glyph char)))))))))
 
-(defun numeric-string (item)
-  (funcall #'april::parse-apl-number-string item))
-
 (defun =vex-string (idiom &optional output special-precedent)
   "Parse a string of text, converting its contents into nested lists of Vex tokens."
   (let ((string-found))
@@ -643,7 +640,7 @@
 	     (?newline-character () (?satisfies (of-utilities idiom :match-newline-character)))
 	     (?numeric-character () (?satisfies (of-utilities idiom :match-numeric-character)))
 	     (?token-character   () (?satisfies (of-utilities idiom :match-token-character)))
-	     ;; (numeric-string (item) (funcall (of-utilities idiom :format-number) item))
+	     (numeric-string-p   (item) (funcall (of-utilities idiom :format-number) item))
 	     (=string (&rest delimiters)
 	       (let ((lastc) (delimiter) (escape-indices) (char-index 0))
 		 (=destructure (_ content)
@@ -822,7 +819,8 @@
 										    :lateral-operators char)
 									:lateral :unitary))))
 						      (list char))))))
-			  (=transform (%and (?test ('numeric-string) (=subseq (%some (?numeric-character))))
+			  (=transform (%and (?test (#'numeric-string-p)
+                                                   (=subseq (%some (?numeric-character))))
                                             (=subseq (%some (?numeric-character))))
 			              (lambda (string)
 			        	(or (funcall (of-utilities idiom :format-number)

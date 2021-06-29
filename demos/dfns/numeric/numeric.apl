@@ -155,7 +155,7 @@ rational ← {                                 ⍝ Rational approximation to rea
   ↑⍵ 1÷⊂1∨⍵                                  ⍝ rational pair: ⍵≡÷⌿rational ⍵.
 }
 
-⍝ TODO: get roman numeral function in once ⎕NC is working
+⍝ TODO: get roman numeral function in
 
 ⍝ From http://dfns.dyalog.com/c_stamps.htm
 
@@ -287,7 +287,7 @@ NormRand ← {                                 ⍝ Random numbers with a normal 
 }
 
 ⍝ Get the phinary function in when possible, it's big
-
+  
 ⍝ From http://dfns.dyalog.com/c_root.htm
 
 root ← { ⍺←2 ⋄ ⍵*÷⍺ }                        ⍝ ⍺'th root, default to sqrt.
@@ -316,7 +316,7 @@ roots ← {                                    ⍝ Roots of quadratic.
   
 ⍝ From http://dfns.dyalog.com/c_polar.htm
 
-polar←{                                      ⍝ Polar from/to cartesian coordinates.
+polar ← {                                    ⍝ Polar from/to cartesian coordinates.
   lam←,[⎕IO-÷2]                              ⍝ laminate along new first axis.
   pol_car←{                                  ⍝ polar from cartesian (default).
     radius←{(+⌿⍵*2)*0.5}                     ⍝ radius (pythagorus).
@@ -367,7 +367,7 @@ convolve ← { ⎕IO←0 ⋄ +⌿(-⍳⍴⍺)⌽⍺∘.×⍵,0×1↓⍺ }
 
 ⍝ From http://dfns.dyalog.com/c_xpower.htm
 
-⍝ xpower ← {                                   ⍝ Fast multi-digit power using FFT.
-⍝   xt←{(0,⍺)xtimes 0,⍵} ⋄ b←⌽2⊥⍣¯1+10⊥⍵       ⍝ boolean showing which powers needed
-⍝   ↑,/xt/b/{xt⍨⍵}\(⊂,10⊥⍣¯1+⍺)⍴⍨⍴b
-⍝ }
+xpower ← {                                   ⍝ Fast multi-digit power using FFT.
+  xt←{(0,⍺)xtimes 0,⍵} ⋄ b←⌽2⊥⍣¯1+10⊥⍵       ⍝ boolean showing which powers needed
+  ↑,/xt/b/{xt⍨⍵}\(⊂,10⊥⍣¯1+⍺)⍴⍨⍴b
+}
