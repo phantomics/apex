@@ -1022,7 +1022,7 @@
 			(and (arrayp right)
 			     (not (loop :for r :below (size right) :never (= (row-major-aref right r)
 									     ;; (row-major-aref omega i)
-                                                                             (+ i 1))))))
+                                                                             (+ i index-origin))))))
 		    (incf (row-major-aref true-indices i))
 		    (if (and (integerp right) (= i (- right index-origin)))
 			(incf (row-major-aref true-indices i)))))
